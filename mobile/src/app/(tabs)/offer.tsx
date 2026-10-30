@@ -1,32 +1,91 @@
 import { useState } from 'react';
-import { Alert, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
-import { Screen } from '@/components/Screen';
+import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import Animated, { FadeInDown } from 'react-native-reanimated';
+import { router } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
 import { ChoiceGrid } from '@/components/ChoiceGrid';
+import { Screen } from '@/components/Screen';
+import { Button, Card, Pill } from '@/components/ui';
 import { helpCategories } from '@/shared/demo';
+import type { HelpCategory } from '@/shared/models';
 import { colors, shared } from '@/theme';
 
 export default function OfferScreen() {
-  const [category, setCategory] = useState('');
+  const [category, setCategory] = useState<HelpCategory | ''>('');
   const [description, setDescription] = useState('');
   const [location, setLocation] = useState('');
   const [published, setPublished] = useState(false);
-  const valid = category && description.trim().length >= 5 && location.trim().length >= 2;
+  const valid = category !== '' && description.trim().length >= 5 && location.trim().length >= 2;
 
-  function publish() {
-    if (!valid) { Alert.alert('Complete the offer', 'Choose a category and add a short description and approximate location.'); return; }
-    setPublished(true);
+  function reset() {
+    setPublished(false);
+    setCategory('');
+    setDescription('');
+    setLocation('');
   }
 
-  if (published) return <Screen><Text style={shared.eyebrow}>OFFER SAVED ON THIS DEVICE</Text><Text style={shared.title}>Offer ready</Text><View style={shared.card}><Text style={styles.successTitle}>Community offer created</Text><Text style={shared.body}>This is a local mobile demonstration. It is not publicly listed and no contact details are shared.</Text></View><Pressable style={shared.primaryButton} onPress={() => { setPublished(false); setCategory(''); setDescription(''); setLocation(''); }}><Text style={shared.primaryButtonText}>Create another offer</Text></Pressable></Screen>;
+  const back = (
+    <Pressable onPress={() => router.navigate('/feed')} style={styles.back}>
+      <Ionicons name="chevron-back" size={18} color={colors.blue} />
+      <Text style={styles.backText}>Help nearby</Text>
+    </Pressable>
+  );
 
-  return <Screen>
-    <Text style={shared.eyebrow}>OFFER HELP</Text><Text style={shared.title}>What can you safely provide?</Text><Text style={shared.subtitle}>Offer practical help only when you can do so safely. Community volunteers are not emergency services.</Text>
-    <View style={shared.card}><Text style={shared.label}>Help category</Text><ChoiceGrid choices={helpCategories} value={category} onChange={setCategory} /></View>
-    <View style={shared.card}><Text style={shared.label}>Describe your offer</Text><TextInput value={description} onChangeText={setDescription} multiline maxLength={400} placeholder="For example, bottled water for 10 people" placeholderTextColor={colors.muted} style={[shared.input, styles.textarea]} /></View>
-    <View style={shared.card}><Text style={shared.label}>Approximate location</Text><TextInput value={location} onChangeText={setLocation} placeholder="Neighborhood or nearby landmark" placeholderTextColor={colors.muted} style={shared.input} /><Text style={shared.muted}>Your exact address and private contact details are never public.</Text></View>
-    <Text style={shared.notice}>Do not enter a dangerous area to provide help. Medical assistance must reflect your actual training and qualifications.</Text>
-    <Pressable style={[shared.primaryButton, !valid && styles.disabled]} onPress={publish} accessibilityState={{ disabled: !valid }}><Text style={shared.primaryButtonText}>Publish offer</Text></Pressable>
-  </Screen>;
+  if (published) {
+    return (
+      <Screen>
+        {back}
+        <Animated.View entering={FadeInDown}>
+          <Card style={{ borderWidth: 2, borderColor: colors.green }}>
+            <Pill icon="checkmark-circle" label="Saved on this device" color={colors.green} bg={colors.greenSoft} />
+            <Text style={shared.title}>Offer ready</Text>
+            <Text style={shared.body}>This is a local demonstration. The offer is not publicly listed and no contact details are shared.</Text>
+          </Card>
+        </Animated.View>
+        <Button icon="add" label="Create another offer" color={colors.text} onPress={reset} />
+      </Screen>
+    );
+  }
+
+  return (
+    <Screen>
+      {back}
+      <View>
+        <Text style={shared.title}>Offer help</Text>
+        <Text style={shared.subtitle}>Offer practical help only when you can do so safely. Volunteers are not emergency services.</Text>
+      </View>
+
+      <Card>
+        <Text style={shared.kicker}>WHAT CAN YOU SAFELY PROVIDE?</Text>
+        <ChoiceGrid choices={helpCategories} value={category} onChange={setCategory} accent={colors.green} />
+      </Card>
+
+      <Card>
+        <Text style={shared.kicker}>DESCRIBE YOUR OFFER</Text>
+        <TextInput
+          value={description}
+          onChangeText={setDescription}
+          multiline
+          maxLength={400}
+          placeholder="For example, bottled water for 10 people"
+          placeholderTextColor={colors.textDim}
+          style={[shared.input, { minHeight: 110, textAlignVertical: 'top' }]}
+        />
+      </Card>
+
+      <Card>
+        <Text style={shared.kicker}>APPROXIMATE LOCATION</Text>
+        <TextInput value={location} onChangeText={setLocation} placeholder="Neighbourhood or nearby landmark" placeholderTextColor={colors.textDim} style={shared.input} />
+        <Pill icon="lock-closed" label="Your exact address and contact details are never public" color={colors.blue} bg={colors.blueSoft} />
+      </Card>
+
+      <Text style={shared.notice}>Do not enter a dangerous area to provide help. Offer medical help only within your actual training.</Text>
+      <Button icon="hand-left" label="Publish offer" color={colors.green} disabled={!valid} onPress={() => valid && setPublished(true)} />
+    </Screen>
+  );
 }
 
-const styles = StyleSheet.create({ textarea: { minHeight: 120, textAlignVertical: 'top' }, disabled: { opacity: .58 }, successTitle: { color: colors.green, fontSize: 18, fontWeight: '800' } });
+const styles = StyleSheet.create({
+  back: { flexDirection: 'row', alignItems: 'center', gap: 2 },
+  backText: { color: colors.blue, fontWeight: '700', fontSize: 14 },
+});

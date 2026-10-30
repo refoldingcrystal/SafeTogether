@@ -1,48 +1,248 @@
 import { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
+import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
 import { router } from 'expo-router';
-import { Screen } from '@/components/Screen';
-import { demonstrationNotice } from '@/shared/demo';
-import { colors, shared } from '@/theme';
-
-const markers = [
-  { id: 'fire', label: 'Fire report', detail: 'Unverified community report', color: colors.red, left: '43%', top: '33%' },
-  { id: 'flood', label: 'Flooding', detail: 'Verified community report', color: '#C18425', left: '68%', top: '59%' },
-  { id: 'road', label: 'Road blockage', detail: 'Awaiting review', color: colors.blue, left: '24%', top: '65%' },
-];
+import { Ionicons } from '@expo/vector-icons';
+import { TacticalMap } from '@/components/TacticalMap';
+import { Button, Card, Pill, SOSButton, StatusBadge } from '@/components/ui';
+import mock from '@/data/mock.json';
+import { categoryIcons, incidentColors, incidentGuide } from '@/icons';
+import { demonstrationIncidents } from '@/shared/demo';
+import { useApp } from '@/state/app';
+import { colors, radius, shadow } from '@/theme';
 
 export default function MapScreen() {
-  const [selected, setSelected] = useState<string | null>(null);
-  const active = markers.find((marker) => marker.id === selected);
+  const app = useApp();
+  const [selectedId, setSelectedId] = useState<string | null>(null);
 
-  return <Screen>
-    <Text style={shared.eyebrow}>COMMUNITY RESPONSE</Text>
-    <Text style={shared.title}>Your area, at a glance</Text>
-    <Text style={shared.subtitle}>Demonstration information only. This map is not connected to live incidents or your location.</Text>
+  return (
+    <View style={styles.root}>
+      <TacticalMap
+        shelling={app.shelling}
+        sos={app.sos}
+        route={app.route}
+        showBasement={app.p2pReceived}
+        incidents={demonstrationIncidents}
+        selectedId={selectedId}
+        onSelect={setSelectedId}
+      />
 
-    <View style={styles.map} accessibilityLabel="Demonstration community map">
-      <Text style={[styles.mapLabel, { left: 22, top: 34 }]}>North Park</Text>
-      <Text style={[styles.mapLabel, { right: 24, top: 76 }]}>Central district</Text>
-      <Text style={[styles.mapLabel, { left: 150, bottom: 35 }]}>Riverside</Text>
-      {markers.map((marker) => <Pressable key={marker.id} onPress={() => setSelected(marker.id)} accessibilityRole="button" accessibilityLabel={`${marker.label}, demonstration`} style={[styles.marker, { backgroundColor: marker.color, left: marker.left as never, top: marker.top as never }]}><Text style={styles.markerText}>!</Text></Pressable>)}
-      <View style={styles.mapPill}><Text style={styles.mapPillText}>DEMONSTRATION MAP · NOT LIVE</Text></View>
+      <View style={styles.top} pointerEvents="box-none">
+        <View style={styles.header}>
+          <View style={styles.logo}>
+            <Ionicons name="add" size={22} color="#fff" />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.appName}>SafeTogether</Text>
+            <Text style={styles.appSub}>Conflict zone · Warsaw</Text>
+          </View>
+          {app.offline ? (
+            <Pill icon="bluetooth" label="Mesh" color={colors.mesh} bg={colors.meshSoft} />
+          ) : (
+            <Pill icon="globe-outline" label="Online" color={colors.green} bg={colors.greenSoft} />
+          )}
+        </View>
+
+        {app.sos ? (
+          <Pill icon="radio" label="Sharing your location with everyone nearby and responders" color={colors.red} bg={colors.redSoft} />
+        ) : (
+          <Pill icon="lock-closed" label="Location private · visible only to your family (3)" color={colors.blue} bg={colors.blueSoft} />
+        )}
+
+        {app.shelling && (
+          <Animated.View entering={FadeInUp} style={styles.alert}>
+            <Ionicons name="warning" size={22} color="#fff" />
+            <View style={{ flex: 1 }}>
+              <Text style={styles.alertTitle}>ALERT: SHELLING IN YOUR AREA</Text>
+              <Text style={styles.alertText}>Take shelter inside a building now. Avoid the red zone.</Text>
+            </View>
+          </Animated.View>
+        )}
+      </View>
+
+      <View style={styles.bottom} pointerEvents="box-none">
+        {!app.sos && (
+          <View style={styles.sosRow} pointerEvents="box-none">
+            <SOSButton active={app.sos} onPress={() => app.setSos(true)} />
+          </View>
+        )}
+        <BottomCard selectedId={selectedId} onClose={() => setSelectedId(null)} />
+      </View>
     </View>
+  );
+}
 
-    {active && <View style={shared.card}><Text style={shared.cardTitle}>{active.label}</Text><Text style={shared.muted}>{active.detail} · approximate demo location</Text><Pressable onPress={() => router.push('/guide/flood')} style={shared.secondaryButton}><Text style={shared.secondaryButtonText}>Open related safety guide</Text></Pressable></View>}
+function BottomCard({ selectedId, onClose }: { selectedId: string | null; onClose: () => void }) {
+  const app = useApp();
+  const incident = demonstrationIncidents.find((i) => i.id === selectedId);
 
-    <View style={shared.card}><Text style={shared.cardTitle}>Official notice</Text><Text style={styles.noticeTag}>DEMONSTRATION · OFFICIAL NOTICE</Text><Text style={shared.body}>{demonstrationNotice.title}</Text><Text style={shared.muted}>{demonstrationNotice.publishedAt} · example notice</Text></View>
-    <View style={styles.actionRow}><Pressable onPress={() => router.push('/report')} style={[shared.primaryButton, shared.urgentButton, styles.actionButton]}><Text style={shared.primaryButtonText}>Report an emergency</Text></Pressable><Pressable onPress={() => router.push('/offer')} style={[shared.secondaryButton, styles.actionButton]}><Text style={shared.secondaryButtonText}>Offer help</Text></Pressable></View>
-    <Text style={shared.notice}>In immediate danger? Contact your local emergency number. SafeTogether does not contact emergency services.</Text>
-  </Screen>;
+  if (app.route === 'basement') {
+    return (
+      <Animated.View entering={FadeInDown} key="route">
+        <Card>
+          <Text style={[styles.kicker, { color: colors.green }]}>ROUTE ACTIVE · AVOIDS SHELLING ZONE</Text>
+          <Text style={styles.title}>Safe basement – {mock.basement.street}</Text>
+          <View style={styles.row}>
+            <Info icon="walk" text={`${mock.basement.distance} · 7 min`} />
+            <Info icon="person" text={mock.basement.author} />
+            <Info icon="bluetooth" text="offline" />
+          </View>
+          <Button label="End route" color={colors.textMuted} outline onPress={() => app.setRoute(null)} />
+        </Card>
+      </Animated.View>
+    );
+  }
+
+  if (app.sos) {
+    return (
+      <Animated.View entering={FadeInDown} key="sos">
+        <Card style={{ borderWidth: 2, borderColor: colors.red }}>
+          <View style={styles.row}>
+            <View style={styles.sosBadge}>
+              <Text style={styles.sosBadgeText}>SOS</Text>
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.title}>SOS sent</Text>
+              <Text style={styles.muted}>Your position is visible to 16 people nearby and to responders.</Text>
+            </View>
+          </View>
+          <View style={styles.row}>
+            {mock.authorities.map((a) => (
+              <Pill key={a.id} icon="checkmark-circle" label={a.label} color={a.color} bg={colors.bg} />
+            ))}
+          </View>
+          <Button icon="shield-checkmark" label="I am safe" color={colors.green} onPress={() => app.setSos(false)} />
+        </Card>
+      </Animated.View>
+    );
+  }
+
+  if (incident) {
+    const color = incidentColors[incident.category] ?? colors.blue;
+    const guide = incidentGuide[incident.category];
+    return (
+      <Animated.View entering={FadeInDown} key={incident.id}>
+        <Card>
+          <View style={styles.row}>
+            <View style={[styles.incidentIcon, { backgroundColor: color }]}>
+              <Ionicons name={categoryIcons[incident.category] ?? 'alert'} size={20} color="#fff" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.kicker, { color }]}>COMMUNITY REPORT · {incident.id}</Text>
+              <Text style={styles.title}>{incident.category}</Text>
+            </View>
+            <Pressable onPress={onClose} accessibilityRole="button" accessibilityLabel="Close" hitSlop={10}>
+              <Ionicons name="close" size={22} color={colors.textDim} />
+            </Pressable>
+          </View>
+          <Text style={styles.body}>{incident.description}</Text>
+          <View style={styles.row}>
+            <StatusBadge status={incident.verificationStatus} />
+            <Info icon="location" text={`approx. ${incident.approximateLocation.label}`} />
+            <Info icon="time" text={incident.submittedAt} />
+          </View>
+          {guide && <Button icon="book" label="Open safety guide" color={colors.blue} outline onPress={() => router.push(`/guide/${guide}`)} />}
+        </Card>
+      </Animated.View>
+    );
+  }
+
+  const e = mock.evacuation;
+  return (
+    <Animated.View entering={FadeInDown} key="evac">
+      <Card>
+        <Text style={[styles.kicker, { color: colors.green }]}>NEAREST SAFE POINT</Text>
+        <Text style={styles.title}>{e.name}</Text>
+        <View style={styles.row}>
+          <Info icon="navigate" text="5.0 km" />
+          <Info icon="walk" text="approx. 65 min" />
+          <Info icon="people" text={e.capacity} />
+        </View>
+        <View style={styles.divider} />
+        <Text style={styles.kicker}>YOUR FAMILY</Text>
+        <View style={styles.row}>
+          {mock.family.map((f) => (
+            <View key={f.id} style={styles.person}>
+              <View style={[styles.avatar, { backgroundColor: f.color }]}>
+                <Text style={styles.avatarText}>{f.initials}</Text>
+              </View>
+              <View>
+                <Text style={styles.personName}>{f.name}</Text>
+                <Text style={styles.personStatus}>{f.status}</Text>
+              </View>
+            </View>
+          ))}
+        </View>
+      </Card>
+    </Animated.View>
+  );
+}
+
+function Info({ icon, text }: { icon: keyof typeof Ionicons.glyphMap; text: string }) {
+  return (
+    <View style={styles.info}>
+      <Ionicons name={icon} size={14} color={colors.textMuted} />
+      <Text style={styles.infoText}>{text}</Text>
+    </View>
+  );
 }
 
 const styles = StyleSheet.create({
-  map: { height: 330, borderRadius: 18, overflow: 'hidden', backgroundColor: '#E6EEF0', borderWidth: 1, borderColor: colors.border },
-  mapLabel: { position: 'absolute', color: colors.muted, fontSize: 12, fontWeight: '700' },
-  marker: { position: 'absolute', width: 42, height: 42, borderRadius: 21, alignItems: 'center', justifyContent: 'center', borderWidth: 3, borderColor: colors.surface },
-  markerText: { color: colors.surface, fontSize: 19, fontWeight: '900' },
-  mapPill: { position: 'absolute', left: 12, bottom: 12, backgroundColor: colors.surface, borderRadius: 7, paddingHorizontal: 9, paddingVertical: 6 },
-  mapPillText: { color: colors.muted, fontSize: 10, letterSpacing: .6, fontWeight: '800' },
-  noticeTag: { color: colors.blue, fontSize: 10, letterSpacing: .5, fontWeight: '800' },
-  actionRow: { flexDirection: 'row', gap: 10 }, actionButton: { flex: 1 },
+  root: { flex: 1 },
+  top: { position: 'absolute', top: 0, left: 0, right: 0, padding: 12, gap: 8 },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    backgroundColor: colors.card,
+    borderRadius: radius.lg,
+    padding: 10,
+    ...shadow,
+  },
+  logo: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    backgroundColor: colors.red,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  appName: { fontSize: 17, fontWeight: '900', color: colors.text },
+  appSub: { fontSize: 12, color: colors.textMuted },
+  alert: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    backgroundColor: colors.red,
+    borderRadius: radius.md,
+    padding: 12,
+    ...shadow,
+  },
+  alertTitle: { color: '#fff', fontWeight: '900', fontSize: 13 },
+  alertText: { color: '#fff', fontSize: 12, marginTop: 2 },
+  bottom: { position: 'absolute', left: 0, right: 0, bottom: 0, padding: 12 },
+  sosRow: { alignItems: 'flex-end', marginBottom: 4 },
+  kicker: { fontSize: 11, fontWeight: '800', letterSpacing: 0.8, color: colors.textDim },
+  title: { fontSize: 18, fontWeight: '800', color: colors.text },
+  body: { fontSize: 14, color: colors.text },
+  muted: { fontSize: 13, color: colors.textMuted, marginTop: 2 },
+  row: { flexDirection: 'row', alignItems: 'center', gap: 12, flexWrap: 'wrap' },
+  info: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  infoText: { fontSize: 13, fontWeight: '600', color: colors.textMuted },
+  divider: { height: 1, backgroundColor: colors.border },
+  person: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  avatar: { width: 30, height: 30, borderRadius: 15, alignItems: 'center', justifyContent: 'center' },
+  avatarText: { color: '#fff', fontWeight: '800' },
+  personName: { fontSize: 13, fontWeight: '700', color: colors.text },
+  personStatus: { fontSize: 11, color: colors.green, fontWeight: '600' },
+  incidentIcon: { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  sosBadge: {
+    width: 46,
+    height: 46,
+    borderRadius: 23,
+    backgroundColor: colors.red,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  sosBadgeText: { color: '#fff', fontWeight: '900' },
 });

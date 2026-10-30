@@ -1,0 +1,91 @@
+{
+  "me": { "latitude": 52.2297, "longitude": 21.0122 },
+
+  "family": [
+    { "id": "mom", "name": "Mom", "initials": "M", "color": "#7A5AF8", "status": "Safe", "coordinate": { "latitude": 52.2445, "longitude": 20.9905 } },
+    { "id": "dad", "name": "Dad", "initials": "D", "color": "#1570EF", "status": "At work", "coordinate": { "latitude": 52.2165, "longitude": 21.0335 } },
+    { "id": "kate", "name": "Kate", "initials": "K", "color": "#DD2590", "status": "At home", "coordinate": { "latitude": 52.2475, "longitude": 21.0345 } }
+  ],
+
+  "evacuation": {
+    "name": "Szczęśliwice evacuation point",
+    "authority": "Mazovian Voivode · Red Cross",
+    "capacity": "1,200 places",
+    "amenities": ["Water", "Doctor", "Transport"],
+    "coordinate": { "latitude": 52.202, "longitude": 20.955 }
+  },
+
+  "shelling": {
+    "epicenter": { "latitude": 52.2312, "longitude": 21.0185 },
+    "radius": 700
+  },
+
+  "authorities": [
+    { "id": "pol", "label": "Police", "color": "#1570EF", "coordinate": { "latitude": 52.2333, "longitude": 21.0075 } },
+    { "id": "psp", "label": "Fire Service", "color": "#D92D20", "coordinate": { "latitude": 52.2258, "longitude": 21.0152 } },
+    { "id": "prm", "label": "Ambulance", "color": "#079455", "coordinate": { "latitude": 52.2344, "longitude": 21.0158 } }
+  ],
+
+  "basement": {
+    "author": "Anna K.",
+    "street": "12 Wilcza St.",
+    "distance": "550 m",
+    "message": "I have a safe basement, come to us.",
+    "details": "There is water, power from a generator and room for 6 people.",
+    "coordinate": { "latitude": 52.2262, "longitude": 21.0062 }
+  },
+
+  "basementRoute": [
+    { "latitude": 52.2297, "longitude": 21.0122 },
+    { "latitude": 52.2299, "longitude": 21.0092 },
+    { "latitude": 52.2281, "longitude": 21.0085 },
+    { "latitude": 52.2272, "longitude": 21.0069 },
+    { "latitude": 52.2262, "longitude": 21.0062 }
+  ],
+
+  "meshChain": [
+    { "name": "Your phone", "detail": "SOS packet encrypted (AES-256)" },
+    { "name": "Neighbour one floor down", "detail": "Bluetooth · 6 m" },
+    { "name": "Mark, Hoża St.", "detail": "Bluetooth · 140 m" },
+    { "name": "Fire Service, City Centre", "detail": "Responders received your SOS" }
+  ],
+
+  "helpFeed": [
+    {
+      "id": "water",
+      "type": "offer",
+      "icon": "water",
+      "title": "Drinking water distribution point",
+      "author": "Red Cross · official",
+      "distance": "400 m",
+      "tags": ["Water", "Until 23:00"]
+    },
+    {
+      "id": "doctor",
+      "type": "request",
+      "icon": "medkit",
+      "title": "Doctor needed – leg wound",
+      "author": "John W.",
+      "distance": "700 m",
+      "tags": ["Urgent", "Bleeding"]
+    },
+    {
+      "id": "bus",
+      "type": "offer",
+      "icon": "bus",
+      "title": "6 free seats on an evacuation bus",
+      "author": "Ocalenie Foundation",
+      "distance": "1.2 km",
+      "tags": ["Leaves 23:30", "Zbawiciela Sq."]
+    },
+    {
+      "id": "power",
+      "type": "request",
+      "icon": "battery-charging",
+      "title": "Power bank for a child with an inhaler",
+      "author": "Ola M.",
+      "distance": "300 m",
+      "tags": ["Power", "Child"]
+    }
+  ]
+}
