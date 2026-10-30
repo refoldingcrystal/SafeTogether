@@ -4,28 +4,30 @@
 
 1. Share the repository link and this README with each collaborator.
 2. Ask each person to clone the repository and use their own branch or isolated worktree. Avoid having multiple people edit the same working tree.
-3. Have each person run the app locally with `python3 -m http.server 4173`, then open `http://localhost:4173`.
+3. Have each person run the browser prototype locally with `python3 -m http.server 4173`, then open `http://localhost:4173`. Read `docs/mobile-app.md` before starting React Native work.
 4. Ask contributors to inspect `git status --short` before editing and preserve any changes they find.
-5. Assign one feature and its files to each person. Ask them to post their ownership before they begin.
+5. Assign one feature outcome to each person. Ask them to post their ownership and expected touchpoints before they begin.
 
-## Suggested assignments
+## Suggested feature workstreams
 
-| Owner | Area | Planned destination | Current overlap |
+| Collaborator | Feature outcome | First focus | Likely touchpoints |
 |---|---|---|---|
-| Collaborator 1 | Report and offer-help flows | `src/public/forms.js`, `src/public/forms-events.js`, `src/public/forms.css` | Both forms share a module because they use the same form pattern |
-| Collaborator 2 | Information & Guides | `src/public/guides.js`, `src/public/guides-events.js`, `src/public/guides-data.js`, `src/public/guides.css` | Guide data and interaction handlers are isolated from other public features |
-| Collaborator 3 | Authority dashboard | `src/authority/dashboard.js`, `src/authority/events.js`, `src/authority/dashboard.css` | Dashboard data uses shared state from `src/shared/state.js` |
-| Coordinator | App shell, navigation, shared state, CSS integration | `index.html`, `src/app.js`, `src/styles.css`, `src/shared/` | Coordinate shared state and UI API changes |
+| Collaborator 1 | Emergency reports and community help | Native report and offer workflows, submission quality, retry states, offer management, privacy language | Expo public-app forms and shared incident/offer data |
+| Collaborator 2 | Information, guides, and preparedness | Native guides, search, guide quality, contacts, checklist, content governance | Expo guides feature, guide data, future content API |
+| Collaborator 3 | Authority operations | Incident review, notices, internal notes, resource workflow, audit history | Authority dashboard and shared incident/notice data |
+| Collaborator 4 | Mobile maps, platform foundation, and integration | Expo mobile foundation, OpenStreetMap research and implementation plan, shared contracts, backend/API groundwork, app integration | Mobile navigation, map, API contracts, test and deployment setup |
 
-The prototype is split into feature modules. Contributors can work in their assigned feature files, but coordinate edits to shared event handlers, data, and state. Keep edits within the assigned files when possible.
+The prototype is split into feature modules. These workstreams describe outcomes rather than exclusive files: contributors should make the smallest necessary changes across the app, coordinate shared-data changes in advance, and avoid concurrent edits to the same file.
+
+Expo / React Native is the public-app stack. OpenStreetMap is the intended future map-data direction. The maps workstream should document the selected React Native renderer, tile source, attribution, usage limits, and location-privacy approach before replacing the demonstration map.
 
 ## Coordination rules
 
-- Claim exact files or functions in the team channel before editing.
-- Do not edit another person's claimed files without coordinating with them.
-- Keep each change focused on the assigned feature and explain any shared API or data-model changes.
+- Claim the feature outcome, user journey, and expected files in the team channel before editing.
+- Coordinate before changing a file another collaborator is actively editing.
+- Keep each change focused on the assigned feature and explain shared API or data-model changes.
 - Do not reset, overwrite, stash, or discard another contributor's work.
-- Do not commit, push, merge, or rebase another person's changes. Each contributor should share a branch or reviewable diff for the coordinator to integrate.
+- Do not commit, push, merge, or rebase another person's changes. Each contributor should share a branch or reviewable diff for the team to review and integrate.
 - Before integrating a change, check `git status --short` and review the diff.
 
 ## Before handing work back
@@ -41,4 +43,4 @@ There are currently no package scripts, build command, lint configuration, or au
 
 ## Copyable kickoff message
 
-> We’re building SafeTogether from the local frontend prototype. Please read `README.md` and `docs/collaboration.md`, run it locally, then claim one suggested assignment in the team channel before editing. Use your own branch or isolated worktree. Work in the feature files assigned to you; coordinate changes to `src/shared/`, shared event handlers, and shared state. Keep changes focused, preserve existing work, run the listed checks, and send back your branch/diff with changed files and known limitations. No commits or merges on behalf of another contributor.
+> We’re building SafeTogether as an Expo / React Native public mobile app plus an authority web dashboard. Please read `README.md`, `docs/collaboration.md`, `docs/implementation-plan.md`, and `docs/mobile-app.md`; run the current browser prototype locally; then claim one feature workstream and its user journey in the team channel before editing. Use your own branch or isolated worktree. Coordinate shared API, map, and data-privacy changes before making them. Keep changes focused, preserve existing work, run the listed checks, and send back your branch/diff with changed files and known limitations. OpenStreetMap is our future map direction; do not replace the demonstration map until renderer, attribution, tile source, and location privacy are agreed.
