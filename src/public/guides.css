@@ -1,0 +1,23 @@
+.guide-layout{display:grid;grid-template-columns:minmax(0,1fr) 315px;gap:18px}
+.search{max-width:520px;width:100%;position:relative}
+.search input{width:100%;padding-left:40px}
+.search:before{content:'⌕';position:absolute;left:14px;top:8px;color:#758993;font-size:24px}
+.category-grid{grid-template-columns:repeat(5,1fr)}
+.category{padding:17px;min-height:115px;text-decoration:none;transition:.15s}
+.category:hover,.guide-card:hover{transform:translateY(-2px);border-color:#aec7d0}
+.cat-icon{font-size:22px;margin-bottom:10px}
+.category h3{font-size:13px}
+.feature{padding:20px;background:#eaf3f6;border-color:#d3e4e9}
+.guide-card{padding:16px;text-decoration:none;display:block;transition:.15s}
+.guide-card p{font-size:12px;line-height:1.5;color:var(--muted);margin:8px 0}
+.guide-cards{grid-template-columns:repeat(2,1fr)}
+.checklist{padding:19px}
+.checkline{display:flex;align-items:flex-start;gap:10px;margin:13px 0;font-size:13px}
+.checkline input{min-height:unset;width:18px;height:18px;accent-color:#347254}
+.contact{padding:18px}
+.guide-body{max-width:780px}
+.steps{list-style:none;padding:0;counter-reset:step}
+.steps li{padding:12px 12px 12px 48px;position:relative;border-bottom:1px solid #edf0f2;line-height:1.55;font-size:14px}
+.steps li:before{counter-increment:step;content:counter(step);position:absolute;left:4px;top:12px;background:#eaf3f6;color:#205b74;font-weight:700;width:27px;height:27px;display:grid;place-items:center;border-radius:50%}
+@media(max-width:950px){.category-grid{grid-template-columns:repeat(3,1fr)}}
+@media(max-width:640px){.category-grid{grid-template-columns:repeat(2,1fr)}.guide-cards{grid-template-columns:1fr}}
