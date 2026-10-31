@@ -216,8 +216,8 @@ export function TacticalMap({
             </View>
           </Marker>
         ))}
-        {placeGroups.map((group, index) => (
-          <Marker key={`place-group-${index}`} coordinate={group.coordinate} zIndex={120} tracksViewChanges={false} onPress={() => { setSelectedOfferId(null); setPlaceChoices(group.items); }}>
+        {placeGroups.map((group) => (
+          <Marker key={group.key} coordinate={group.coordinate} zIndex={120} tracksViewChanges={false} onPress={() => { setSelectedOfferId(null); setPlaceChoices(group.items); }}>
             <View style={styles.placeGroupMarker}><Ionicons name="layers" size={15} color="#fff" /><Text style={styles.placeGroupCount}>{group.items.length}</Text></View>
           </Marker>
         ))}

@@ -173,8 +173,8 @@ export function TacticalMap(props: TacticalMapProps) {
           groupedKeys.has(`offer:${offer.id}`) ? null :
           <Marker key={offer.id} position={ll(offer.coordinate)} icon={icon('<div class="m-offer">＋<div class="m-label">HELP OFFER</div></div>', [38, 38])} eventHandlers={{ click: () => setSelectedOfferId(offer.id) }} />
         ))}
-        {placeGroups.map((group, index) => (
-          <Marker key={`place-group-${index}`} position={ll(group.coordinate)} zIndexOffset={2000} icon={icon(`<div class="m-cluster">${group.items.length}</div>`, [42, 42])} eventHandlers={{ click: () => { setSelectedOfferId(null); setPlaceChoices(group.items); } }} />
+        {placeGroups.map((group) => (
+          <Marker key={group.key} position={ll(group.coordinate)} zIndexOffset={2000} icon={icon(`<div class="m-cluster">${group.items.length}</div>`, [42, 42])} eventHandlers={{ click: () => { setSelectedOfferId(null); setPlaceChoices(group.items); } }} />
         ))}
 
         {nearbyPeople.map((person) => (

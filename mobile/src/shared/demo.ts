@@ -65,15 +65,6 @@ export const demonstrationDangerZones: DangerZone[] = [
     radius: 320,
     severity: 'high',
   },
-  {
-    id: 'DZ-04',
-    kind: 'riot',
-    title: 'Riot near the Constitutional Tribunal',
-    summary: 'Avoid the area and follow police instructions.',
-    coordinate: { latitude: 52.2156, longitude: 21.0236 },
-    radius: 380,
-    severity: 'high',
-  },
 ];
 
 export const emergencySites: EmergencySite[] = [
