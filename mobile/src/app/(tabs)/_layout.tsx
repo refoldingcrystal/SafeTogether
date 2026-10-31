@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { router } from 'expo-router';
+import { router, usePathname } from 'expo-router';
 import { Tabs } from 'expo-router/js-tabs';
 import { Ionicons } from '@expo/vector-icons';
 import type { IconName } from '@/icons';
@@ -14,10 +14,14 @@ function tabIcon(name: IconName) {
 
 export default function TabLayout() {
   const { offline, meshStatus } = useApp();
+  const pathname = usePathname();
 
-  // Losing the internet makes the mesh the only way out, so bring it to the front.
+  // Mesh is only needed without internet: bring it to the front when offline, leave it when back online.
   useEffect(() => {
     if (offline) router.navigate('/mesh');
+    else if (pathname === '/mesh') router.navigate('/');
+    // Only react to connectivity changes, not to every tab switch.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [offline]);
 
   return (
@@ -35,7 +39,8 @@ export default function TabLayout() {
       <Tabs.Screen
         name="mesh"
         options={{
-          title: 'Mesh',
+          title: 'Offline',
+          href: offline ? undefined : null,
           tabBarBadge: meshStatus === 'discovering' || meshStatus === 'relaying' ? 'ON' : undefined,
           tabBarBadgeStyle: { backgroundColor: colors.mesh, fontSize: 9 },
           tabBarIcon: tabIcon('radio'),

@@ -9,21 +9,68 @@ import mock from '@/data/mock.json';
 import { helpCategories } from '@/shared/demo';
 import { useApp } from '@/state/app';
 import { getApproximateCurrentLocation } from '@/shared/location';
+import type { HelpCategory } from '@/shared/models';
 import { api, type HelpFeedItem as ApiHelpFeedItem } from '@/services/api';
 import { colors, radius, shadow } from '@/theme';
 
 type HelpFeedItem = ApiHelpFeedItem;
+type HelpFeedFilter = 'all' | 'shelter' | 'food' | 'medical' | 'transport' | 'other';
+
+const HELP_FILTERS: { id: HelpFeedFilter; label: string; emoji?: string }[] = [
+  { id: 'all', label: 'All' },
+  { id: 'shelter', label: 'Shelter', emoji: '🏠' },
+  { id: 'food', label: 'Food / water', emoji: '🥫' },
+  { id: 'medical', label: 'Medical', emoji: '🩹' },
+  { id: 'transport', label: 'Transport', emoji: '🚐' },
+  { id: 'other', label: 'Other', emoji: '🤝' },
+];
+
+const HELP_CATEGORY_EMOJI: Record<HelpCategory, string> = {
+  Shelter: '🏠',
+  'Food and water': '🥫',
+  Transport: '🚐',
+  'Qualified first aid': '🩹',
+  Supplies: '📦',
+  'Other practical help': '🤝',
+};
+
+const HELP_CATEGORY_LABELS: Record<HelpCategory, string> = {
+  Shelter: 'Shelter',
+  'Food and water': 'Food / water',
+  Transport: 'Transport',
+  'Qualified first aid': 'Medical',
+  Supplies: 'Supplies',
+  'Other practical help': 'Other',
+};
+
+function categoriesForItem(item: HelpFeedItem): Set<Exclude<HelpFeedFilter, 'all'>> {
+  const text = [item.kind, item.title, item.description, ...item.tags].filter(Boolean).join(' ').toLowerCase();
+  const categories = new Set<Exclude<HelpFeedFilter, 'all'>>();
+  if (/shelter|safe zone|basement|accommodation|evacuation/.test(text)) categories.add('shelter');
+  if (/food|water|meal|kitchen|grocer|bread/.test(text)) categories.add('food');
+  if (/medical|medic|doctor|nurse|injur|wound|first aid|insulin|inhaler|pharmac/.test(text)) categories.add('medical');
+  if (/transport|bus|ride|vehicle|drive|pick.?up/.test(text)) categories.add('transport');
+  if (categories.size === 0) categories.add('other');
+  return categories;
+}
+
+function displayHelpCategory(category: string) {
+  return HELP_CATEGORY_LABELS[category as HelpCategory] ?? category;
+}
 
 export default function HelpScreen() {
   const app = useApp();
   const b = mock.basement;
   const [offerModalVisible, setOfferModalVisible] = useState(false);
+  const [activeFilter, setActiveFilter] = useState<HelpFeedFilter>('all');
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
   const [description, setDescription] = useState('');
   const [feedItems, setFeedItems] = useState<HelpFeedItem[]>(mock.helpFeed as HelpFeedItem[]);
   const [editingOfferId, setEditingOfferId] = useState<string | null>(null);
   const [activeChat, setActiveChat] = useState<HelpFeedItem | null>(null);
-  const visibleFeedItems = useMemo(() => feedItems.filter((item) => item.type === 'offer' ? item.isMine === true : item.isMine !== true), [feedItems]);
+  const visibleFeedItems = useMemo(() => feedItems
+    .filter((item) => item.type === 'offer' ? item.isMine === true : item.isMine !== true)
+    .filter((item) => activeFilter === 'all' || categoriesForItem(item).has(activeFilter)), [activeFilter, feedItems]);
 
   useFocusEffect(useCallback(() => {
     let active = true;
@@ -84,10 +131,28 @@ export default function HelpScreen() {
     <ScrollView style={styles.root} contentContainerStyle={styles.content} keyboardShouldPersistTaps="always">
       <View>
         <Text style={styles.title}>Help nearby</Text>
-        <Text style={styles.sub}>Your offers and requests you can respond to</Text>
+        <Text style={styles.sub}>Community offers and requests</Text>
       </View>
 
-      <Button icon="hand-left" label="Offer help" color={colors.green} onPress={() => setOfferModalVisible(true)} />
+      <Button icon="add" label="I can offer help" color={colors.green} onPress={() => setOfferModalVisible(true)} />
+
+      <View style={styles.filters} accessibilityLabel="Filter help by category">
+        {HELP_FILTERS.map((filter) => {
+          const selected = activeFilter === filter.id;
+          return (
+            <Pressable
+              key={filter.id}
+              onPress={() => setActiveFilter(filter.id)}
+              accessibilityRole="button"
+              accessibilityState={{ selected }}
+              style={[styles.filterChip, selected && styles.filterChipSelected]}
+            >
+              {filter.emoji && <Text style={styles.filterEmoji}>{filter.emoji}</Text>}
+              <Text style={[styles.filterText, selected && styles.filterTextSelected]}>{filter.label}</Text>
+            </Pressable>
+          );
+        })}
+      </View>
 
       {app.p2pReceived && (
         <Animated.View entering={FadeInDown}>
@@ -117,6 +182,13 @@ export default function HelpScreen() {
       {visibleFeedItems.map((item, i) => (
         <HelpItem key={item.id} item={item} index={i} onEdit={editOffer} onStop={stopOffering} onChat={openChat} />
       ))}
+      {visibleFeedItems.length === 0 && (
+        <Text style={styles.emptyFeed}>
+          {activeFilter === 'all'
+            ? 'No help posts nearby yet.'
+            : `No ${HELP_FILTERS.find((filter) => filter.id === activeFilter)?.label.toLowerCase()} posts nearby yet.`}
+        </Text>
+      )}
 
       <OfferHelpModal
         visible={offerModalVisible}
@@ -184,7 +256,7 @@ function OfferHelpModal({
                     style={[styles.categoryOption, selected && styles.categoryOptionSelected]}
                   >
                     <Ionicons name={selected ? 'checkbox' : 'square-outline'} size={19} color={selected ? colors.green : colors.textDim} />
-                    <Text style={[styles.categoryText, selected && styles.categoryTextSelected]}>{category}</Text>
+                    <Text style={[styles.categoryText, selected && styles.categoryTextSelected]}>{HELP_CATEGORY_EMOJI[category]} {displayHelpCategory(category)}</Text>
                   </Pressable>
                 );
               })}
@@ -223,37 +295,39 @@ function OfferHelpModal({
 
 function HelpItem({ item, index, onEdit, onStop, onChat }: { item: HelpFeedItem; index: number; onEdit?: (item: HelpFeedItem) => void; onStop?: (id: string) => void; onChat?: (item: HelpFeedItem) => void }) {
   const offer = item.type === 'offer';
-  const color = offer ? colors.green : colors.red;
+  const filters = [...categoriesForItem(item)].map((category) => HELP_FILTERS.find((filter) => filter.id === category));
+  const categoryHeading = offer
+    ? item.tags.map(displayHelpCategory).join(' · ') || 'Other'
+    : filters.map((filter) => filter?.label).filter(Boolean).join(' · ') || 'Other';
+  const emoji = (offer ? HELP_CATEGORY_EMOJI[item.tags[0] as HelpCategory] : undefined) ?? filters[0]?.emoji ?? '🤝';
+  const cardTitle = offer && item.description ? item.description : item.title;
 
   return (
     <Animated.View entering={FadeInDown.delay(index * 80)}>
       <Card>
-        <View style={styles.row}>
-          <View style={[styles.icon, { backgroundColor: offer ? colors.greenSoft : colors.redSoft }]}>
-            <Ionicons name={item.icon as keyof typeof Ionicons.glyphMap} size={22} color={color} />
-          </View>
-          <View style={{ flex: 1 }}>
-            <Text style={[styles.type, { color }]}>{offer ? 'OFFERING' : 'NEEDED'}</Text>
-            <Text style={styles.cardTitle}>{item.title}</Text>
-            <Text style={styles.meta}>
-              {item.author} · {item.distance}
-            </Text>
-          </View>
+        <View style={{ gap: 6 }}>
+          <Text style={styles.heading}>{emoji} {categoryHeading}</Text>
+          <Text style={styles.cardTitle}>{cardTitle}</Text>
+          <Text style={styles.meta}>
+            {item.author} · {item.distance}
+          </Text>
         </View>
-        <View style={styles.tags}>
-          {item.tags.map((t) => (
-            <Text key={t} style={styles.tag}>
-              {t}
-            </Text>
-          ))}
-        </View>
-        {item.description && <Text style={styles.body}>{item.description}</Text>}
-        {item.isMine ? (
+        {!offer && item.tags.length > 0 && (
+          <View style={styles.tags}>
+            {item.tags.map((t) => (
+              <Text key={t} style={styles.tag}>
+                {displayHelpCategory(t)}
+              </Text>
+            ))}
+          </View>
+        )}
+        {!offer && item.description && <Text style={styles.body}>{item.description}</Text>}
+        {offer && item.isMine ? (
           <View style={styles.offerActions}>
             <Button icon="create-outline" label="Edit offering" color={colors.green} outline onPress={() => onEdit?.(item)} />
             <Button icon="close-circle-outline" label="Stop offering" color={colors.red} outline onPress={() => onStop?.(item.id)} />
           </View>
-        ) : !offer ? (
+        ) : !offer && !item.isMine ? (
           <Button icon="chatbubble-ellipses" label="Chat" color={colors.blue} onPress={() => onChat?.(item)} />
         ) : null}
       </Card>
@@ -266,10 +340,16 @@ const styles = StyleSheet.create({
   content: { padding: 16, gap: 12 },
   title: { fontSize: 26, fontWeight: '900', color: colors.text },
   sub: { fontSize: 13, color: colors.textMuted },
+  filters: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  filterChip: { minHeight: 42, flexDirection: 'row', alignItems: 'center', gap: 7, borderWidth: 1, borderColor: colors.border, borderRadius: radius.pill, paddingHorizontal: 15, backgroundColor: colors.card },
+  filterChipSelected: { borderColor: colors.blue, backgroundColor: colors.blue },
+  filterEmoji: { fontSize: 16 },
+  filterText: { color: colors.text, fontSize: 14, fontWeight: '700' },
+  filterTextSelected: { color: '#fff' },
+  emptyFeed: { color: colors.textMuted, fontSize: 14, textAlign: 'center', paddingVertical: 28 },
   row: { flexDirection: 'row', alignItems: 'center', gap: 12, justifyContent: 'space-between' },
-  icon: { width: 46, height: 46, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
-  type: { fontSize: 11, fontWeight: '800', letterSpacing: 0.8 },
-  cardTitle: { fontSize: 16, fontWeight: '800', color: colors.text },
+  heading: { fontSize: 17, fontWeight: '800', color: colors.text },
+  cardTitle: { fontSize: 15, color: colors.text },
   body: { fontSize: 13, color: colors.textMuted },
   meta: { fontSize: 12, color: colors.textMuted },
   tags: { flexDirection: 'row', gap: 6, flexWrap: 'wrap' },

@@ -40,7 +40,7 @@ export const demonstrationIncidents: Incident[] = [
 export const demonstrationNotice: OfficialNotice = {
   id: 'N-01',
   title: 'Stay clear of the Riverside underpass',
-  body: 'Example notice for demonstration purposes. Always follow directions from local authorities.',
+  body: 'Always follow directions from local authorities.',
   status: 'published',
   publishedAt: 'Today, 22:10',
 };
@@ -50,8 +50,8 @@ export const demonstrationDangerZones: DangerZone[] = [
   {
     id: 'DZ-01',
     kind: 'attack',
-    title: 'Military attack reported (demo)',
-    summary: 'Demonstration alert: take cover indoors and avoid the area.',
+    title: 'Military attack reported',
+    summary: 'Take cover indoors and avoid the area.',
     coordinate: { latitude: 52.2312, longitude: 21.0185 },
     radius: 700,
     severity: 'critical',
@@ -101,6 +101,6 @@ export const nearbyPeople: NearbyPerson[] = [
 ];
 
 export const demonstrationHelpOffers: MapHelpOffer[] = [
-  { id: 'demo-offer-water', title: 'Food and water', description: 'Bottled water available for pickup.', author: 'Demo volunteer', distance: 'Central district', coordinate: { latitude: 52.228, longitude: 20.999 } },
-  { id: 'demo-offer-shelter', title: 'Shelter', description: 'A few safe places available nearby.', author: 'Demo volunteer', distance: 'Southern district', coordinate: { latitude: 52.219, longitude: 21.016 } },
+  { id: 'demo-offer-water', title: 'Food and water', description: 'Bottled water available for pickup.', author: 'Volunteer', distance: 'Central district', coordinate: { latitude: 52.228, longitude: 20.999 } },
+  { id: 'demo-offer-shelter', title: 'Shelter', description: 'A few safe places available nearby.', author: 'Volunteer', distance: 'Southern district', coordinate: { latitude: 52.219, longitude: 21.016 } },
 ];

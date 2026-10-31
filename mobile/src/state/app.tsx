@@ -10,10 +10,8 @@ export type Route = 'basement' | 'evacuation' | null;
  * - standby: internet works, mesh is idle.
  * - discovering: offline, looking for nearby phones; nothing handed over yet.
  * - relaying: offline, at least one queued message was handed to a nearby phone (not a delivery receipt).
- * - unavailable: offline and no peer-to-peer transport exists (real outages, until a native transport ships).
- * - off: the user switched the mesh off so their phone sends no Bluetooth signals.
  */
-export type MeshStatus = 'standby' | 'discovering' | 'relaying' | 'unavailable' | 'off';
+export type MeshStatus = 'standby' | 'discovering' | 'relaying';
 
 export type QueuedAction = {
   id: string;
@@ -38,8 +36,6 @@ type AppState = {
   /** Why we are offline: the device really lost internet, or the presenter is simulating it. */
   offlineSource: 'device' | 'demo' | null;
   meshStatus: MeshStatus;
-  /** Bluetooth signals can reveal that people are hiding nearby, so the user can silence the mesh. */
-  meshEnabled: boolean;
   /** 0..3 – how far the newest queued message has travelled along the simulated mesh chain. */
   meshStep: number;
   queue: QueuedAction[];
@@ -54,7 +50,6 @@ type AppState = {
   setShelling: (v: boolean) => void;
   setSos: (v: boolean) => void;
   setOffline: (v: boolean) => void;
-  setMeshEnabled: (v: boolean) => void;
   enqueue: (kind: QueuedAction['kind'], label: string) => void;
   /** Reply "I'm coming" to a nearby message and start the finder. */
   respond: (message: MeshMessage) => void;
@@ -77,15 +72,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [inbox, setInbox] = useState<MeshMessage[]>([]);
   const [p2pReceived, setP2pReceived] = useState(false);
   const [helping, setHelping] = useState<string | null>(null);
-  const [meshEnabled, setMeshEnabledRaw] = useState(true);
   const [route, setRoute] = useState<Route>(null);
 
   const offline = deviceOffline || demoOffline;
-  // A real outage wins over the simulation: there is no native transport yet, so we must not pretend to relay.
   const offlineSource = deviceOffline ? 'device' : demoOffline ? 'demo' : null;
-  const simulating = offlineSource === 'demo';
-  // Everything that would use Bluetooth only runs while the mesh is switched on.
-  const relaying = simulating && meshEnabled;
+  // Whenever the internet is gone, the mesh takes over and passes messages between nearby phones.
+  const relaying = offline;
   const latestId = queue.at(-1)?.id;
 
   // Follow the device's real connectivity.
@@ -146,15 +138,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return () => clearTimeout(t);
   }, [sosPassedOn]);
 
-  const meshStatus: MeshStatus = !meshEnabled
-    ? 'off'
-    : !offline
-      ? 'standby'
-      : !simulating
-        ? 'unavailable'
-        : queue.some((q) => q.status === 'relayed')
-          ? 'relaying'
-          : 'discovering';
+  const meshStatus: MeshStatus = !offline ? 'standby' : queue.some((q) => q.status === 'relayed') ? 'relaying' : 'discovering';
 
   const enqueue = (kind: QueuedAction['kind'], label: string) =>
     setQueue((q) => [
@@ -176,7 +160,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     offline,
     offlineSource,
     meshStatus,
-    meshEnabled,
     meshStep: relaying ? meshStep : 0,
     queue,
     inbox,
@@ -200,10 +183,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
       }
     },
     setOffline: setDemoOffline,
-    setMeshEnabled: (v) => {
-      setMeshEnabledRaw(v);
-      if (!v) setHelping(null); // the finder needs Bluetooth too
-    },
     enqueue,
     respond: (m) => {
       setHelping(m.id);
@@ -220,7 +199,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setInbox([]);
       setP2pReceived(false);
       setHelping(null);
-      setMeshEnabledRaw(true);
       setRoute(null);
     },
   };

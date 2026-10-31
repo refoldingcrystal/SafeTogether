@@ -37,7 +37,7 @@ export default function OfferScreen() {
           <Card style={{ borderWidth: 2, borderColor: colors.green }}>
             <Pill icon="checkmark-circle" label="Saved on this device" color={colors.green} bg={colors.greenSoft} />
             <Text style={shared.title}>Offer ready</Text>
-            <Text style={shared.body}>This is a local demonstration. The offer is not publicly listed and no contact details are shared.</Text>
+            <Text style={shared.body}>Your offer is saved. No contact details are shared.</Text>
           </Card>
         </Animated.View>
         <Button icon="add" label="Create another offer" color={colors.text} onPress={reset} />

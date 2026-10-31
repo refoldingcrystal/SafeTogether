@@ -1,7 +1,7 @@
 import 'leaflet/dist/leaflet.css';
 import './map.css';
 import { useEffect, useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import L from 'leaflet';
 import { Circle, MapContainer, Marker, Polyline, TileLayer, useMap } from 'react-leaflet';
 import { HelpOfferMapPopup } from '@/components/HelpOfferMapPopup';
@@ -199,8 +199,6 @@ export function TacticalMap(props: TacticalMapProps) {
       <CurrentLocationButton onLocation={setCurrentLocation} />
       <MapPlaceChooser visible={placeChoices !== null} items={placeChoices ?? []} onChoose={choosePlace} onClose={() => setPlaceChoices(null)} />
       {selectedOffer && <HelpOfferMapPopup offer={selectedOffer} onClose={() => setSelectedOfferId(null)} />}
-      {!tileUrl && <View pointerEvents="none" style={styles.tileNotice}><Text style={styles.tileNoticeText}>Basemap provider not configured · demonstration overlays only</Text></View>}
-      {tileUrl && tileUnavailable && <View pointerEvents="none" style={styles.tileNotice}><Text style={styles.tileNoticeText}>Basemap unavailable · demonstration overlays only</Text></View>}
     </View>
   );
 }
@@ -245,6 +243,4 @@ function RouteLine({ points }: { points: LatLng[] }) {
 
 const styles = StyleSheet.create({
   root: { ...StyleSheet.absoluteFill, zIndex: 0 },
-  tileNotice: { position: 'absolute', top: 10, left: 10, right: 10, alignItems: 'center' },
-  tileNoticeText: { backgroundColor: '#FFFFFFE6', borderRadius: 8, color: colors.textMuted, fontSize: 11, fontWeight: '700', paddingHorizontal: 10, paddingVertical: 6, textAlign: 'center' },
 });

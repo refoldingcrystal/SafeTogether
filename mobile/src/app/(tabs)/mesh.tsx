@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react';
-import { AccessibilityInfo, Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
+import { AccessibilityInfo, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { MeshCompose } from '@/components/MeshCompose';
@@ -13,20 +13,6 @@ const STATUS: Record<MeshStatus, { icon: IconName; title: string; note?: string;
   standby: { icon: 'globe-outline', title: 'Online', color: colors.green, bg: colors.greenSoft },
   discovering: { icon: 'search', title: 'Offline · Searching nearby', color: colors.mesh, bg: colors.meshSoft },
   relaying: { icon: 'git-network-outline', title: 'Offline · Passed to nearby phones', color: colors.mesh, bg: colors.meshSoft },
-  unavailable: {
-    icon: 'cloud-offline-outline',
-    title: 'Offline · Mesh unavailable',
-    note: 'Messages stay on this phone. In danger, call 112.',
-    color: colors.orange,
-    bg: colors.orangeSoft,
-  },
-  off: {
-    icon: 'eye-off-outline',
-    title: 'Mesh off',
-    note: 'Your phone sends no Bluetooth signals. Messages wait on this phone.',
-    color: colors.textMuted,
-    bg: colors.border,
-  },
 };
 
 const KIND_ICON: Record<string, { icon: IconName; color: string }> = {
@@ -43,8 +29,7 @@ const ABOUT = [
   '“Passed on” means a nearby phone took a copy, not that help received it.',
   'Messages include your location so people nearby can find you. They are not encrypted yet.',
   'Close by, Bluetooth signal strength shows if you are getting closer.',
-  'Bluetooth signals can show others that someone is nearby. Switch Mesh off if that puts you at risk.',
-  'This version only simulates the mesh.',
+  'Bluetooth signals can show others that someone is nearby. Turn Bluetooth off in phone settings if that puts you at risk.',
 ];
 
 export default function MeshScreen() {
@@ -73,25 +58,20 @@ export default function MeshScreen() {
     <ScrollView style={styles.root} contentContainerStyle={styles.content}>
       <View style={styles.header}>
         <Text style={styles.title} accessibilityRole="header">
-          Mesh
+          Offline
         </Text>
-        {app.offlineSource === 'demo' && <Text style={styles.demo}>DEMO</Text>}
-        <Switch
-          value={app.meshEnabled}
-          onValueChange={app.setMeshEnabled}
-          trackColor={{ true: colors.mesh, false: colors.border }}
-          accessibilityLabel="Mesh: pass messages through nearby phones over Bluetooth"
-        />
         <Pressable
           onPress={() => setAbout(!about)}
           accessibilityRole="button"
-          accessibilityLabel="About Mesh and privacy"
+          accessibilityLabel="How offline messaging works"
           accessibilityState={{ expanded: about }}
           hitSlop={10}
         >
           <Ionicons name="information-circle-outline" size={26} color={colors.textMuted} />
         </Pressable>
       </View>
+
+      <Text style={styles.small}>Send and receive messages through phones nearby.</Text>
 
       {about && (
         <View style={styles.section}>
@@ -228,16 +208,6 @@ const styles = StyleSheet.create({
   content: { padding: 16, gap: 14 },
   header: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   title: { flex: 1, fontSize: 26, fontWeight: '900', color: colors.text },
-  demo: {
-    fontSize: 11,
-    fontWeight: '800',
-    color: colors.violet,
-    backgroundColor: '#EBE9FE',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: radius.pill,
-    overflow: 'hidden',
-  },
   status: { flexDirection: 'row', alignItems: 'center', gap: 10, borderRadius: radius.md, padding: 12 },
   statusTitle: { fontSize: 15, fontWeight: '800' },
   small: { fontSize: 12, color: colors.textMuted },
