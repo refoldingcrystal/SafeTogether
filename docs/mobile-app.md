@@ -56,6 +56,8 @@ OpenStreetMap is the intended map-data direction. Before implementation, the map
 - The public location precision rule.
 - The behavior for denied permission, no signal, cached content, offline use, and map-load failure.
 
+The web map does not call `tile.openstreetmap.org` by default. Set `EXPO_PUBLIC_MAP_TILE_URL` and `EXPO_PUBLIC_MAP_TILE_ATTRIBUTION` only after an approved provider, contact details, caching behavior, and usage limits are documented. If the configured provider returns a tile error, the app stops requesting tiles and keeps the demonstration overlays visible rather than retrying a blocked service.
+
 The public map must show approximate locations only. Exact locations, internal notes, private contact details, and unapproved attachments must never be placed in the mobile client’s public map data.
 
 ## Device capabilities
