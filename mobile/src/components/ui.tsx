@@ -1,6 +1,6 @@
-import { useEffect, type ReactNode } from 'react';
+import { type ReactNode } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import Animated, { Easing, SlideInUp, SlideOutUp, useAnimatedStyle, useSharedValue, withRepeat, withTiming } from 'react-native-reanimated';
+import Animated, { SlideInUp, SlideOutUp } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import mock from '@/data/mock.json';
@@ -58,22 +58,10 @@ export function Card({ children, style }: { children: ReactNode; style?: object 
   return <View style={[styles.card, style]}>{children}</View>;
 }
 
-export function SOSButton({ active, onPress }: { active: boolean; onPress: () => void }) {
-  const t = useSharedValue(0);
-  useEffect(() => {
-    t.set(withRepeat(withTiming(1, { duration: active ? 900 : 1600, easing: Easing.out(Easing.quad) }), -1));
-  }, [t, active]);
-  const ring = useAnimatedStyle(() => ({ opacity: 0.6 * (1 - t.value), transform: [{ scale: 1 + t.value * 0.7 }] }));
-
+export function NeedHelpButton({ onPress }: { onPress: () => void }) {
   return (
-    <Pressable onPress={onPress} accessibilityRole="button" accessibilityLabel="SOS">
-      <View style={styles.sosWrap}>
-        <Animated.View style={[styles.sosRing, ring]} />
-        <View style={[styles.sos, active && { backgroundColor: colors.redDark }]}>
-          <Text style={styles.sosText}>SOS</Text>
-          {active && <Text style={styles.sosSub}>SENT</Text>}
-        </View>
-      </View>
+    <Pressable onPress={onPress} accessibilityRole="button" accessibilityLabel="Need help" style={({ pressed }) => [styles.needHelpButton, pressed && { opacity: 0.8 }]}>
+      <Text style={styles.needHelpTitle}>Need help</Text>
     </Pressable>
   );
 }
@@ -206,21 +194,8 @@ const styles = StyleSheet.create({
   },
   buttonText: { fontSize: 15, fontWeight: '700' },
   card: { backgroundColor: colors.card, borderRadius: radius.lg, padding: 16, gap: 10, ...shadow },
-  sosWrap: { width: 96, height: 96, alignItems: 'center', justifyContent: 'center' },
-  sosRing: { position: 'absolute', width: 84, height: 84, borderRadius: 42, backgroundColor: colors.red },
-  sos: {
-    width: 84,
-    height: 84,
-    borderRadius: 42,
-    backgroundColor: colors.red,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 4,
-    borderColor: '#fff',
-    ...shadow,
-  },
-  sosText: { color: '#fff', fontSize: 26, fontWeight: '900', letterSpacing: 1 },
-  sosSub: { color: '#fff', fontSize: 9, fontWeight: '800', letterSpacing: 1, marginTop: -2 },
+  needHelpButton: { alignItems: 'center', backgroundColor: colors.card, borderWidth: 1, borderColor: colors.blueSoft, paddingHorizontal: 20, paddingVertical: 12, borderRadius: radius.lg, ...shadow },
+  needHelpTitle: { color: colors.text, fontSize: 15, fontWeight: '800' },
   status: {
     height: 30,
     flexDirection: 'row',
