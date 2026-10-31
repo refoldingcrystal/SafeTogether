@@ -19,7 +19,7 @@ export type EmergencySite = {
   coordinate: Coordinate;
   capacity?: string;
 };
-export type MapHelpOffer = { id: string; title: string; description?: string; author: string; coordinate: Coordinate };
+export type MapHelpOffer = { id: string; title: string; description?: string; author: string; distance: string; coordinate: Coordinate };
 
 export const incidentCategories: IncidentCategory[] = ['Medical emergency', 'Fire', 'Flooding', 'Trapped person', 'Missing person', 'Road blockage', 'Infrastructure damage', 'Other'];
 export const helpCategories: HelpCategory[] = ['Shelter', 'Food and water', 'Transport', 'Qualified first aid', 'Supplies', 'Other practical help'];
@@ -97,6 +97,6 @@ export const emergencySites: EmergencySite[] = [
 ];
 
 export const demonstrationHelpOffers: MapHelpOffer[] = [
-  { id: 'demo-offer-water', title: 'Food and water', description: 'Bottled water available for pickup.', author: 'Demo volunteer', coordinate: { latitude: 52.228, longitude: 20.999 } },
-  { id: 'demo-offer-shelter', title: 'Shelter', description: 'A few safe places available nearby.', author: 'Demo volunteer', coordinate: { latitude: 52.219, longitude: 21.016 } },
+  { id: 'demo-offer-water', title: 'Food and water', description: 'Bottled water available for pickup.', author: 'Demo volunteer', distance: 'Central district', coordinate: { latitude: 52.228, longitude: 20.999 } },
+  { id: 'demo-offer-shelter', title: 'Shelter', description: 'A few safe places available nearby.', author: 'Demo volunteer', distance: 'Southern district', coordinate: { latitude: 52.219, longitude: 21.016 } },
 ];

@@ -58,8 +58,8 @@ export default function MapScreen() {
       setSites(mapSites);
       setHelpOffers(snapshot.helpFeed.flatMap((item) => {
         const location = item.approximateLocation;
-        if (item.type !== 'offer' || location?.latitude == null || location.longitude == null) return [];
-        return [{ id: item.id, title: item.title, description: item.description, author: item.author, coordinate: { latitude: location.latitude, longitude: location.longitude } }];
+        if (item.type !== 'offer' || item.isMine || location?.latitude == null || location.longitude == null) return [];
+        return [{ id: item.id, title: item.title, description: item.description, author: item.author, distance: item.distance, coordinate: { latitude: location.latitude, longitude: location.longitude } }];
       }));
       if (mapSites.length) setRouteTo((current) => mapSites.some((site) => site.id === current) ? current : mapSites[0].id);
       setAllIncidents(snapshot.incidents.map((item) => ({

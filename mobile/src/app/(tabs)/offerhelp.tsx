@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Alert, Image, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { router, useFocusEffect } from 'expo-router';
@@ -37,6 +37,7 @@ export default function HelpScreen() {
   const [editingOfferId, setEditingOfferId] = useState<string | null>(null);
   const [activeChat, setActiveChat] = useState<HelpFeedItem | null>(null);
   const [chatThreads, setChatThreads] = useState<Record<string, ChatMessage[]>>({});
+  const visibleFeedItems = useMemo(() => feedItems.filter((item) => item.type === 'offer' ? item.isMine === true : item.isMine !== true), [feedItems]);
 
   useFocusEffect(useCallback(() => {
     let active = true;
@@ -164,7 +165,7 @@ export default function HelpScreen() {
     <ScrollView style={styles.root} contentContainerStyle={styles.content} keyboardShouldPersistTaps="always">
       <View>
         <Text style={styles.title}>Help nearby</Text>
-        <Text style={styles.sub}>Offers and requests from neighbours</Text>
+        <Text style={styles.sub}>Your offers and requests you can respond to</Text>
       </View>
 
       <Button icon="hand-left" label="Offer help" color={colors.green} onPress={() => setOfferModalVisible(true)} />
@@ -194,7 +195,7 @@ export default function HelpScreen() {
         </Animated.View>
       )}
 
-      {feedItems.map((item, i) => (
+      {visibleFeedItems.map((item, i) => (
         <HelpItem key={item.id} item={item} index={i} onEdit={editOffer} onStop={stopOffering} onChat={openChat} />
       ))}
 

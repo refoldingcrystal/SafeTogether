@@ -151,10 +151,10 @@ function publicOffer(offer, viewerId) {
     isMine: offer.ownerId === viewerId, status: offer.status, createdAt: offer.createdAt,
   };
 }
-function publicHelpRequest(request) {
+function publicHelpRequest(request, viewerId) {
   return {
     id: request.id, type: 'request', kind: request.kind, icon: request.icon || 'hand-left', title: request.title,
-    author: displayName(request.requesterId), distance: request.approximateLocation?.label || 'Location not shared',
+    author: displayName(request.requesterId), isMine: request.requesterId === viewerId, distance: request.approximateLocation?.label || 'Location not shared',
     tags: request.tags, description: request.description || undefined, status: request.status, createdAt: request.createdAt,
   };
 }
@@ -164,7 +164,7 @@ function publicIncident(incident) {
 }
 function helpFeed(viewerId) {
   return [
-    ...db.helpRequests.filter((request) => request.status === 'active' && request.kind === 'resource').map(publicHelpRequest),
+    ...db.helpRequests.filter((request) => request.status === 'active' && request.kind === 'resource').map((request) => publicHelpRequest(request, viewerId)),
     ...db.offers.filter((offer) => offer.status === 'active').map((offer) => publicOffer(offer, viewerId)),
   ].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 }
@@ -257,7 +257,7 @@ async function route(req, res) {
 
   if (resource === 'help-requests' && method === 'GET' && parts.length === 2) {
     const requestedKind = url.searchParams.get('kind');
-    const rows = db.helpRequests.filter((item) => item.status === 'active' && (!requestedKind || item.kind === normalizeHelpKind(requestedKind))).map(publicHelpRequest);
+    const rows = db.helpRequests.filter((item) => item.status === 'active' && (!requestedKind || item.kind === normalizeHelpKind(requestedKind))).map((item) => publicHelpRequest(item, user.id));
     return send(res, 200, { data: rows });
   }
   if (resource === 'help-requests' && method === 'POST' && !recordId) {
@@ -267,7 +267,7 @@ async function route(req, res) {
     if (!title) throw fail(400, 'Request title is required');
     const row = { id: id('req'), kind, title, categories, tags: Array.isArray(body.tags) ? body.tags.map((item) => clean(item, 40)).filter(Boolean).slice(0, 8) : categories, description, approximateLocation: optionalLocation(body.approximateLocation), status: 'active', requesterId: user.id, participants: [user.id], createdAt: now(), updatedAt: now() };
     db.helpRequests.unshift(row); audit(user.id, 'help_request_created', 'help_request', row.id); await persist();
-    return send(res, 201, { data: publicHelpRequest(row) });
+    return send(res, 201, { data: publicHelpRequest(row, user.id) });
   }
   if (resource === 'help-requests' && method === 'PATCH' && recordId && parts.length === 3) {
     const row = db.helpRequests.find((item) => item.id === recordId); if (!row) throw fail(404, 'Help request not found');
@@ -278,7 +278,7 @@ async function route(req, res) {
     if (body.description !== undefined) row.description = clean(body.description, 1000);
     if (body.approximateLocation !== undefined) row.approximateLocation = optionalLocation(body.approximateLocation);
     row.updatedAt = now(); audit(user.id, 'help_request_updated', 'help_request', row.id, { status: row.status }); await persist();
-    return send(res, 200, { data: publicHelpRequest(row) });
+    return send(res, 200, { data: publicHelpRequest(row, user.id) });
   }
   if (resource === 'help-requests' && method === 'GET' && recordId && parts[3] === 'messages') {
     const row = db.helpRequests.find((item) => item.id === recordId); if (!row) throw fail(404, 'Help request not found');

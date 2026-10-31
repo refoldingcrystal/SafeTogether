@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useMemo, useRef } from 'react';
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { Platform, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import MapView, { Circle, Marker, Polyline, UrlTile } from 'react-native-maps';
@@ -64,7 +64,9 @@ export function TacticalMap({
   onDestinationLongPress,
 }: TacticalMapProps) {
   const map = useRef<MapView>(null);
+  const [selectedOfferId, setSelectedOfferId] = useState<string | null>(null);
   const selected = useMemo(() => incidents.find((incident) => incident.id === selectedId), [incidents, selectedId]);
+  const selectedOffer = helpOffers.find((offer) => offer.id === selectedOfferId);
 
   useEffect(() => {
     const selectedPoint = selected ? incidentPoint(selected) : null;
@@ -152,7 +154,7 @@ export function TacticalMap({
         {plannedRoute && plannedRoute.length > 1 ? <RouteLine points={plannedRoute} /> : route === 'evacuation' ? <RouteLine points={[mock.me, mock.evacuation.coordinate]} /> : route === 'basement' ? <RouteLine points={mock.basementRoute} /> : null}
 
         {emergencySites.map((site) => (
-          <Marker key={site.id} coordinate={site.coordinate} title={site.title} description={site.summary} onPress={() => onSelectSite?.(site.id)} zIndex={30}>
+          <Marker key={site.id} coordinate={site.coordinate} title={site.title} description={site.summary} onPress={() => onSelectSite?.(site.id)} zIndex={30} tracksViewChanges={false}>
             <View style={[styles.emergencySiteMarker, { backgroundColor: siteColors[site.kind] }]}>
               <Ionicons name={siteIcons[site.kind]} size={18} color="#fff" />
               <Text style={styles.mapMarkerLabel}>{siteLabels[site.kind]}</Text>
@@ -160,9 +162,9 @@ export function TacticalMap({
           </Marker>
         ))}
         {helpOffers.map((offer) => (
-          <Marker key={offer.id} coordinate={offer.coordinate} title={`Help offered: ${offer.title}`} description={`${offer.author}${offer.description ? ` · ${offer.description}` : ''}`} zIndex={35}>
+          <Marker key={offer.id} coordinate={offer.coordinate} zIndex={35} tracksViewChanges={false} onPress={() => setSelectedOfferId(offer.id)}>
             <View style={styles.offerMarker}>
-              <Ionicons name="hand-left" size={15} color="#fff" />
+              <Ionicons name="medkit" size={15} color="#fff" />
               <Text style={styles.offerMarkerLabel}>OFFER</Text>
             </View>
           </Marker>
@@ -190,6 +192,16 @@ export function TacticalMap({
           <View style={[styles.meMarker, sos && styles.meMarkerSos]}><Ionicons name={sos ? 'radio' : 'person'} size={12} color="#fff" /></View>
         </Marker>
       </MapView>
+      {selectedOffer && (
+        <View style={styles.offerPopup}>
+          <View style={styles.offerPopupText}>
+            <Text style={styles.offerPopupTitle}>{selectedOffer.title}</Text>
+            <Text style={styles.offerPopupMeta}>{selectedOffer.author} · {selectedOffer.distance}</Text>
+            {!!selectedOffer.description && <Text style={styles.offerPopupDescription}>{selectedOffer.description}</Text>}
+          </View>
+          <Text onPress={() => setSelectedOfferId(null)} accessibilityRole="button" style={styles.offerPopupClose}>×</Text>
+        </View>
+      )}
       <View pointerEvents="none" style={styles.attribution}><Text style={styles.attributionText}>© OpenStreetMap contributors</Text></View>
     </View>
   );
@@ -217,6 +229,12 @@ const styles = StyleSheet.create({
   emergencySiteMarker: { minWidth: 72, height: 36, borderRadius: 10, borderWidth: 3, borderColor: '#fff', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, paddingHorizontal: 7, ...shadow },
   offerMarker: { minWidth: 64, height: 34, borderRadius: 17, borderWidth: 3, borderColor: '#fff', backgroundColor: colors.green, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, paddingHorizontal: 7, ...shadow },
   offerMarkerLabel: { color: '#fff', fontSize: 9, fontWeight: '900', letterSpacing: 0.3 },
+  offerPopup: { position: 'absolute', top: 58, left: 12, right: 62, flexDirection: 'row', alignItems: 'flex-start', gap: 10, backgroundColor: colors.card, borderRadius: 12, padding: 12, ...shadow },
+  offerPopupText: { flex: 1, gap: 3 },
+  offerPopupTitle: { color: colors.text, fontSize: 15, fontWeight: '800' },
+  offerPopupMeta: { color: colors.textMuted, fontSize: 12, fontWeight: '600' },
+  offerPopupDescription: { color: colors.text, fontSize: 13, marginTop: 4 },
+  offerPopupClose: { color: colors.textMuted, fontSize: 23, fontWeight: '600', paddingHorizontal: 5 },
   destinationMarker: { width: 38, height: 38, borderRadius: 19, borderWidth: 3, borderColor: '#fff', backgroundColor: colors.text, alignItems: 'center', justifyContent: 'center', ...shadow },
   mapMarkerLabel: { color: '#fff', fontSize: 9, fontWeight: '900', letterSpacing: 0.3 },
 });
