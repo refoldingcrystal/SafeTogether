@@ -32,7 +32,6 @@ export default function TabLayout() {
       }}
     >
       <Tabs.Screen name="index" options={{ title: 'Map', tabBarIcon: tabIcon('map') }} />
-      <Tabs.Screen name="report" options={{ title: 'Report', tabBarIcon: tabIcon('alert-circle') }} />
       <Tabs.Screen
         name="mesh"
         options={{
@@ -42,7 +41,7 @@ export default function TabLayout() {
           tabBarIcon: tabIcon('radio'),
         }}
       />
-      <Tabs.Screen name="feed" options={{ title: 'Help', tabBarIcon: tabIcon('people') }} />
+      <Tabs.Screen name="offerhelp" options={{ title: 'Help', tabBarIcon: tabIcon('people') }} />
       <Tabs.Screen name="guides" options={{ title: 'Guides', tabBarIcon: tabIcon('book') }} />
       <Tabs.Screen name="offer" options={{ href: null }} />
     </Tabs>

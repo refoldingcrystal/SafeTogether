@@ -1,19 +1,72 @@
 import { useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import * as Location from 'expo-location';
 import { TacticalMap } from '@/components/TacticalMap';
-import { Button, Card, Pill, SOSButton, StatusBadge } from '@/components/ui';
+import { Button, Card, NeedHelpButton, Pill, StatusBadge } from '@/components/ui';
 import mock from '@/data/mock.json';
 import { categoryIcons, incidentColors, incidentGuide } from '@/icons';
 import { demonstrationIncidents } from '@/shared/demo';
 import { useApp } from '@/state/app';
 import { colors, radius, shadow } from '@/theme';
 
+type HelpKind = 'Emergency' | 'Report an event' | 'Request resources';
+type LocationState = 'idle' | 'locating' | 'ready' | 'unavailable';
+type LocationMode = 'automatic' | 'manual';
+
+const helpKinds: { title: HelpKind; detail: string; icon: keyof typeof Ionicons.glyphMap; examples: string[] }[] = [
+  { title: 'Emergency', detail: 'For example: medical emergency, fire, or trapped person', icon: 'medkit-outline', examples: ['Medical emergency', 'Fire', 'Trapped person'] },
+  { title: 'Report an event', detail: 'For example: flooding, damage, unrest, or conflict', icon: 'alert-circle-outline', examples: ['Flooding', 'Road blockage', 'Infrastructure damage', 'Riot or civil unrest', 'Armed conflict or shelling'] },
+  { title: 'Request resources', detail: 'For example: water, shelter, or transport', icon: 'cube-outline', examples: ['Food or water', 'Shelter', 'Transport'] },
+];
+
 export default function MapScreen() {
   const app = useApp();
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [helpMenuOpen, setHelpMenuOpen] = useState(false);
+  const [helpKind, setHelpKind] = useState<HelpKind | null>(null);
+  const [requestExample, setRequestExample] = useState('');
+  const [customRequest, setCustomRequest] = useState(false);
+  const [details, setDetails] = useState('');
+  const [location, setLocation] = useState('');
+  const [locationState, setLocationState] = useState<LocationState>('idle');
+  const [locationMode, setLocationMode] = useState<LocationMode>('automatic');
+
+  async function openHelpMenu() {
+    setHelpMenuOpen(true);
+    setLocationMode('automatic');
+    void findCurrentLocation();
+  }
+
+  async function findCurrentLocation() {
+    setLocationState('locating');
+    try {
+      const permission = await Location.requestForegroundPermissionsAsync();
+      if (permission.status !== 'granted') {
+        setLocationState('unavailable');
+        return;
+      }
+      const current = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+      setLocation(`Approx. ${current.coords.latitude.toFixed(2)}, ${current.coords.longitude.toFixed(2)}`);
+      setLocationState('ready');
+    } catch {
+      setLocationState('unavailable');
+    }
+  }
+
+  function chooseKind(kind: HelpKind) {
+    setHelpKind(kind);
+    setRequestExample('');
+    setCustomRequest(false);
+  }
+
+  function submitHelpRequest() {
+    if (!helpKind) return;
+    setHelpMenuOpen(false);
+    app.setSos(true);
+  }
 
   return (
     <View style={styles.root}>
@@ -44,7 +97,7 @@ export default function MapScreen() {
         </View>
 
         {app.sos ? (
-          <Pill icon="radio" label="Sharing your location with everyone nearby and responders" color={colors.red} bg={colors.redSoft} />
+          <Pill icon="heart" label="Help request active · demonstration only" color={colors.blue} bg={colors.blueSoft} />
         ) : (
           <Pill icon="lock-closed" label="Location private · visible only to your family (3)" color={colors.blue} bg={colors.blueSoft} />
         )}
@@ -63,16 +116,73 @@ export default function MapScreen() {
       <View style={styles.bottom} pointerEvents="box-none">
         {!app.sos && (
           <View style={styles.sosRow} pointerEvents="box-none">
-            <SOSButton active={app.sos} onPress={() => app.setSos(true)} />
+            <NeedHelpButton onPress={openHelpMenu} />
           </View>
         )}
-        <BottomCard selectedId={selectedId} onClose={() => setSelectedId(null)} />
+        <BottomCard selectedId={selectedId} onClose={() => setSelectedId(null)} helpKind={helpKind} requestExample={requestExample} location={location} details={details} />
       </View>
+      {helpMenuOpen && (
+        <View style={styles.sheetBackdrop}>
+          <Animated.View entering={FadeInUp} style={styles.sheet}>
+            <ScrollView contentContainerStyle={styles.sheetContent} showsVerticalScrollIndicator>
+              <View style={styles.sheetHeader}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.title}>What kind of help do you need?</Text>
+                  <Text style={styles.muted}>Choose one option, then add details if it is safe to do so.</Text>
+                </View>
+                <Pressable onPress={() => setHelpMenuOpen(false)} accessibilityRole="button" accessibilityLabel="Close help menu">
+                  <Ionicons name="close" size={24} color={colors.textMuted} />
+                </Pressable>
+              </View>
+              {helpKinds.map((option) => (
+                <Pressable key={option.title} onPress={() => chooseKind(option.title)} accessibilityRole="radio" accessibilityState={{ selected: helpKind === option.title }} style={[styles.helpOption, helpKind === option.title && styles.helpOptionSelected]}>
+                  <Ionicons name={option.icon} size={21} color={helpKind === option.title ? colors.blue : colors.textMuted} />
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.optionTitle}>{option.title}</Text>
+                    <Text style={styles.optionDetail}>{option.detail}</Text>
+                  </View>
+                  {helpKind === option.title && <Ionicons name="checkmark-circle" size={20} color={colors.blue} />}
+                </Pressable>
+              ))}
+              {helpKind && (
+                <>
+                  <Text style={styles.kicker}>QUICK CHOICES</Text>
+                  <View style={styles.quickChoices}>
+                    {helpKinds.find((option) => option.title === helpKind)?.examples.map((example) => (
+                      <Pressable key={example} onPress={() => { setRequestExample(example); setCustomRequest(false); }} style={[styles.quickChoice, requestExample === example && styles.quickChoiceSelected]}>
+                        <Text style={[styles.quickChoiceText, requestExample === example && { color: colors.blue }]}>{example}</Text>
+                      </Pressable>
+                    ))}
+                    <Pressable onPress={() => { setRequestExample(''); setCustomRequest(true); }} style={[styles.quickChoice, customRequest && styles.quickChoiceSelected]}>
+                      <Text style={[styles.quickChoiceText, customRequest && { color: colors.blue }]}>Other</Text>
+                    </Pressable>
+                  </View>
+                  {customRequest && <TextInput value={requestExample} onChangeText={setRequestExample} placeholder="Describe the kind of help you need" placeholderTextColor={colors.textDim} style={styles.input} accessibilityLabel="Other help request" />}
+                </>
+              )}
+              <Text style={styles.kicker}>YOUR APPROXIMATE LOCATION</Text>
+              <View style={styles.locationChoices}>
+                <Button icon="locate" label="Use current location" color={colors.blue} outline onPress={() => { setLocationMode('automatic'); void findCurrentLocation(); }} disabled={locationState === 'locating'} />
+                <Button label="Enter manually" color={colors.textMuted} outline onPress={() => { setLocationMode('manual'); setLocation(''); }} />
+              </View>
+              {locationMode === 'manual' ? (
+                <TextInput value={location} onChangeText={setLocation} placeholder="Neighbourhood or nearby landmark" placeholderTextColor={colors.textDim} style={styles.input} accessibilityLabel="Approximate location" />
+              ) : (
+                <Text style={styles.locationNote}>{locationState === 'locating' ? 'Finding your approximate location…' : locationState === 'ready' ? `Using ${location}.` : 'Current location is unavailable. You can enter a landmark manually.'}</Text>
+              )}
+              <Text style={styles.kicker}>ADDITIONAL DETAILS (OPTIONAL)</Text>
+              <TextInput value={details} onChangeText={setDetails} placeholder="What happened or what do you need?" placeholderTextColor={colors.textDim} style={[styles.input, styles.detailsInput]} multiline maxLength={400} textAlignVertical="top" accessibilityLabel="Additional details" />
+              <Text style={styles.disclaimer}>This demonstration does not contact emergency services or send your request to other people.</Text>
+              <Button icon="send" label="Continue with help request" disabled={!helpKind} onPress={submitHelpRequest} />
+            </ScrollView>
+          </Animated.View>
+        </View>
+      )}
     </View>
   );
 }
 
-function BottomCard({ selectedId, onClose }: { selectedId: string | null; onClose: () => void }) {
+function BottomCard({ selectedId, onClose, helpKind, requestExample, location, details }: { selectedId: string | null; onClose: () => void; helpKind: HelpKind | null; requestExample: string; location: string; details: string }) {
   const app = useApp();
   const incident = demonstrationIncidents.find((i) => i.id === selectedId);
 
@@ -95,21 +205,18 @@ function BottomCard({ selectedId, onClose }: { selectedId: string | null; onClos
 
   if (app.sos) {
     return (
-      <Animated.View entering={FadeInDown} key="sos">
+      <Animated.View entering={FadeInDown} key="need-help">
         <Card style={{ borderWidth: 2, borderColor: colors.red }}>
           <View style={styles.row}>
             <View style={styles.sosBadge}>
-              <Text style={styles.sosBadgeText}>SOS</Text>
+              <Text style={styles.sosBadgeText}>HELP</Text>
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={styles.title}>SOS sent</Text>
-              <Text style={styles.muted}>Your position is visible to 16 people nearby and to responders.</Text>
+              <Text style={styles.title}>{helpKind ?? 'Help'} request active</Text>
+              {!!requestExample.trim() && <Text style={styles.muted}>Request: {requestExample.trim()}</Text>}
+              <Text style={styles.muted}>{location ? `${location} · ` : ''}This is a demonstration and has not contacted responders or other people.</Text>
+              {!!details.trim() && <Text style={styles.muted}>Details: {details.trim()}</Text>}
             </View>
-          </View>
-          <View style={styles.row}>
-            {mock.authorities.map((a) => (
-              <Pill key={a.id} icon="checkmark-circle" label={a.label} color={a.color} bg={colors.bg} />
-            ))}
           </View>
           <Button icon="shield-checkmark" label="I am safe" color={colors.green} onPress={() => app.setSos(false)} />
         </Card>
@@ -221,7 +328,24 @@ const styles = StyleSheet.create({
   alertTitle: { color: '#fff', fontWeight: '900', fontSize: 13 },
   alertText: { color: '#fff', fontSize: 12, marginTop: 2 },
   bottom: { position: 'absolute', left: 0, right: 0, bottom: 0, padding: 12 },
-  sosRow: { alignItems: 'flex-end', marginBottom: 4 },
+  sosRow: { alignItems: 'center', marginBottom: 4 },
+  sheetBackdrop: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, backgroundColor: colors.bg },
+  sheet: { flex: 1, backgroundColor: colors.bg },
+  sheetContent: { padding: 20, paddingBottom: 40, gap: 12 },
+  sheetHeader: { flexDirection: 'row', gap: 12, alignItems: 'flex-start' },
+  helpOption: { flexDirection: 'row', alignItems: 'center', gap: 12, borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, padding: 12 },
+  helpOptionSelected: { borderColor: colors.blue, backgroundColor: colors.blueSoft },
+  quickChoices: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  quickChoice: { borderWidth: 1, borderColor: colors.border, borderRadius: radius.pill, paddingHorizontal: 12, paddingVertical: 8 },
+  quickChoiceSelected: { borderColor: colors.blue, backgroundColor: colors.blueSoft },
+  quickChoiceText: { color: colors.textMuted, fontSize: 12, fontWeight: '700' },
+  optionTitle: { color: colors.text, fontSize: 15, fontWeight: '800' },
+  optionDetail: { color: colors.textMuted, fontSize: 12, marginTop: 2 },
+  input: { minHeight: 46, borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, backgroundColor: colors.bg, color: colors.text, paddingHorizontal: 12, paddingVertical: 10, fontSize: 15 },
+  detailsInput: { minHeight: 92 },
+  locationNote: { color: colors.textMuted, fontSize: 12, lineHeight: 17 },
+  locationChoices: { flexDirection: 'row', gap: 8 },
+  disclaimer: { color: colors.orange, backgroundColor: colors.orangeSoft, borderRadius: radius.md, padding: 10, fontSize: 12, fontWeight: '600', lineHeight: 17 },
   kicker: { fontSize: 11, fontWeight: '800', letterSpacing: 0.8, color: colors.textDim },
   title: { fontSize: 18, fontWeight: '800', color: colors.text },
   body: { fontSize: 14, color: colors.text },

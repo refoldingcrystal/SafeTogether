@@ -25,7 +25,13 @@
     "plugins": [
       "expo-router",
       "expo-status-bar",
-      "expo-font"
+      "expo-font",
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Allow SafeTogether to use your location while you create a help request."
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true

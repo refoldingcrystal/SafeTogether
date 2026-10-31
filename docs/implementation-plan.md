@@ -70,23 +70,23 @@ Next after backend integration:
 
 Handoff: state the map data source, attribution requirements, privacy decisions, UI states added, and API assumptions.
 
-### Collaborator 2 — Report panel
+### Collaborator 2 — Need help action
 
 First sprint:
 
-1. Separate report validation rules by incident category.
-2. Add explicit loading, success, retry, and duplicate-submission states.
-3. Preserve entered details after a failed submission.
-4. Add a clear report reference and queued/offline confirmation state.
-5. Keep privacy and local-emergency-service guidance visible throughout the flow.
+1. Make the Map-based Need help action’s idle, active, and cancellation states unambiguous.
+2. State clearly that the current flow is a demonstration and does not contact emergency services or responders.
+3. Keep location-sharing disclosure visible before activation and let the user cancel immediately.
+4. Ensure the control has an accessible label, focus behavior, and non-colour state cues.
+5. Keep local-emergency-service guidance visible throughout the flow.
 
 Next after backend integration:
 
-- Replace local demonstration submissions with API calls.
-- Add server-returned report references and safe retry behavior.
-- Add optional attachment metadata only after secure upload handling is designed.
+- Replace the demonstration state with an approved, authenticated help-request flow.
+- Add confirmed delivery status and safe retry behavior only when the delivery channel exists.
+- Define location precision, retention, consent, and cancellation behavior before sending any request.
 
-Handoff: list validation behavior, submission states, privacy decisions, API assumptions, and changed files.
+Handoff: list user-visible states, accessibility behavior, privacy decisions, API assumptions, and changed files.
 
 ### Collaborator 3 — Mesh panel
 
@@ -146,12 +146,11 @@ Handoff: list changed guide content, sources still needed, configuration assumpt
 
 The team integrates work only after the shared model is agreed. Verify this journey end to end:
 
-1. A public report is submitted and receives a reference.
-2. It enters the authority review queue as `Awaiting review`.
-3. An authority user changes its review state.
-4. The public map and incident detail reflect only approved public information.
-5. An authority user publishes an official notice.
-6. The public map presents that notice as official, distinct from community reports.
+1. A public incident is available with an appropriate review state.
+2. An authority user changes its review state.
+3. The public map and incident detail reflect only approved public information.
+4. An authority user publishes an official notice.
+5. The public map presents that notice as official, distinct from community reports.
 
 Add a similar test path for a help offer: create, browse approximate information, withdraw, and ensure private contact details remain unavailable publicly.
 
@@ -190,7 +189,7 @@ Do this only after location privacy rules are agreed.
 | Priority | Owner | Deliverable |
 |---|---|---|
 | P0 | Collaborator 1 | Map-panel filters, incident states, official notices, OpenStreetMap decision, location-privacy plan |
-| P0 | Collaborator 2 | Report-panel validation, submission, error, retry, and queued states |
+| P0 | Collaborator 2 | Map-based Need help action states, cancellation, accessibility, and location-privacy disclosure |
 | P0 | Collaborator 3 | Mesh-panel state clarity, queued-action visibility, accessibility fallback, and transport/privacy proposal |
 | P0 | Collaborator 4 | Help-panel feed states plus offer availability, capacity, management, withdrawal, and privacy states |
 | P0 | Collaborator 5 | Guides-panel metadata, contacts configuration, search, related guides, and checklist polish |
