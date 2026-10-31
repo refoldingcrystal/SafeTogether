@@ -328,7 +328,7 @@ function HelpItem({ item, index, onEdit, onStop, onChat }: { item: HelpFeedItem;
           <Text style={styles.heading}>{emoji} {categoryHeading}</Text>
           <Text style={styles.cardTitle}>{cardTitle}</Text>
           <Text style={styles.meta}>
-            {offer ? `Offered by ${item.author}` : `Requested by ${item.author}`} · {item.distance}
+            {offer && item.isMine ? 'Offered by you' : offer ? `Offered by ${item.author}` : `Requested by ${item.author}`} · {item.distance}
           </Text>
         </View>
         {!offer && item.tags.length > 0 && (
