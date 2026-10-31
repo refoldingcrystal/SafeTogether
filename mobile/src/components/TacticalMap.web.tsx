@@ -3,13 +3,16 @@ import './map.css';
 import { useEffect, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import L from 'leaflet';
-import { Circle, MapContainer, Marker, Polyline, Popup, TileLayer, useMap } from 'react-leaflet';
+import { Circle, MapContainer, Marker, Polyline, TileLayer, useMap } from 'react-leaflet';
+import { HelpOfferMapPopup } from '@/components/HelpOfferMapPopup';
+import { MapPlaceChooser } from '@/components/MapPlaceChooser';
 import mock from '@/data/mock.json';
 import { incidentColors } from '@/icons';
 import { colors } from '@/theme';
 import type { Incident } from '@/shared/models';
 import type { DangerZone, EmergencySite, MapHelpOffer } from '@/shared/demo';
 import type { TacticalMapProps } from './TacticalMap';
+import { groupMapPlaces, type MapPlaceItem } from '@/shared/mapPlaces';
 
 type LatLng = { latitude: number; longitude: number };
 
@@ -60,7 +63,28 @@ function Camera({ shelling, sos, route, incidents, selectedId }: TacticalMapProp
 
 export function TacticalMap(props: TacticalMapProps) {
   const [tileUnavailable, setTileUnavailable] = useState(false);
+  const [placeChoices, setPlaceChoices] = useState<MapPlaceItem[] | null>(null);
+  const [selectedOfferId, setSelectedOfferId] = useState<string | null>(null);
   const { shelling, sos, route, showBasement, incidents, selectedId, onSelect, dangerZones = [], emergencySites = [], helpOffers = [], plannedRoute, onSelectDanger, onSelectSite } = props;
+  const selectedOffer = helpOffers.find((offer) => offer.id === selectedOfferId);
+  const placeGroups = groupMapPlaces([
+    ...incidents.flatMap((incident) => {
+      const coordinate = incidentPoint(incident);
+      return coordinate ? [{ key: `incident:${incident.id}`, kind: 'incident' as const, id: incident.id, title: incident.category, coordinate: { latitude: coordinate[0], longitude: coordinate[1] } }] : [];
+    }),
+    ...dangerZones.map((zone) => ({ key: `danger:${zone.id}`, kind: 'danger' as const, id: zone.id, title: zone.title, coordinate: zone.coordinate })),
+    ...emergencySites.map((site) => ({ key: `site:${site.id}`, kind: 'site' as const, id: site.id, title: site.title, coordinate: site.coordinate })),
+    ...helpOffers.map((offer) => ({ key: `offer:${offer.id}`, kind: 'offer' as const, id: offer.id, title: offer.title, coordinate: offer.coordinate })),
+  ]);
+  const groupedKeys = new Set(placeGroups.flatMap((group) => group.items.map((item) => item.key)));
+
+  function choosePlace(item: MapPlaceItem) {
+    setPlaceChoices(null);
+    if (item.kind === 'incident') onSelect(item.id);
+    else if (item.kind === 'danger') onSelectDanger?.(item.id);
+    else if (item.kind === 'site') onSelectSite?.(item.id);
+    else setSelectedOfferId(item.id);
+  }
 
   return (
     <View style={styles.root}>
@@ -92,11 +116,11 @@ export function TacticalMap(props: TacticalMapProps) {
                 pathOptions={{ color, weight: 1.5, dashArray: '5 5', fillColor: color, fillOpacity: 0.12 }}
                 eventHandlers={{ click: () => onSelect(incident.id) }}
               />
-              <Marker
+              {!groupedKeys.has(`incident:${incident.id}`) && <Marker
                 position={pos}
                 icon={icon(`<div class="${cls}" style="--c:${color}"><svg viewBox="0 0 24 24">${GLYPHS[incident.category] ?? DEFAULT_GLYPH}</svg></div>`, [34, 34])}
                 eventHandlers={{ click: () => onSelect(incident.id) }}
-              />
+              />}
             </span>
           );
         })}
@@ -108,7 +132,7 @@ export function TacticalMap(props: TacticalMapProps) {
               {[1, 0.7, 0.42].map((factor) => (
                 <Circle key={factor} center={ll(zone.coordinate)} radius={zone.radius * factor} pathOptions={{ color: factor === 1 ? color : 'transparent', weight: factor === 1 ? 2 : 0, fillColor: color, fillOpacity: factor === 1 ? 0.1 : factor === 0.7 ? 0.13 : 0.2 }} />
               ))}
-              <Marker position={ll(zone.coordinate)} icon={icon(`<div class="m-danger" style="--c:${color}">${dangerSymbol(zone)}</div>`, [38, 38])} eventHandlers={{ click: () => onSelectDanger?.(zone.id) }} />
+              {!groupedKeys.has(`danger:${zone.id}`) && <Marker position={ll(zone.coordinate)} icon={icon(`<div class="m-danger" style="--c:${color}">${dangerSymbol(zone)}</div>`, [38, 38])} eventHandlers={{ click: () => onSelectDanger?.(zone.id) }} />}
             </span>
           );
         })}
@@ -135,12 +159,15 @@ export function TacticalMap(props: TacticalMapProps) {
         {plannedRoute && plannedRoute.length > 1 ? <RouteLine points={plannedRoute} /> : route === 'evacuation' ? <RouteLine points={[mock.me, mock.evacuation.coordinate]} /> : route === 'basement' ? <RouteLine points={mock.basementRoute} /> : null}
 
         {emergencySites.map((site) => (
+          groupedKeys.has(`site:${site.id}`) ? null :
           <Marker key={site.id} position={ll(site.coordinate)} icon={icon(`<div class="m-site" style="--c:${siteColor(site)}">${siteSymbol(site)}<div class="m-label">${site.title}</div></div>`, [38, 38])} eventHandlers={{ click: () => onSelectSite?.(site.id) }} />
         ))}
         {helpOffers.map((offer) => (
-          <Marker key={offer.id} position={ll(offer.coordinate)} icon={icon('<div class="m-offer">＋<div class="m-label">HELP OFFER</div></div>', [38, 38])}>
-            <Popup><strong>{offer.title}</strong><br />{offer.author}{offer.description ? <><br />{offer.description}</> : null}</Popup>
-          </Marker>
+          groupedKeys.has(`offer:${offer.id}`) ? null :
+          <Marker key={offer.id} position={ll(offer.coordinate)} icon={icon('<div class="m-offer">＋<div class="m-label">HELP OFFER</div></div>', [38, 38])} eventHandlers={{ click: () => setSelectedOfferId(offer.id) }} />
+        ))}
+        {placeGroups.map((group, index) => (
+          <Marker key={`place-group-${index}`} position={ll(group.coordinate)} zIndexOffset={2000} icon={icon(`<div class="m-cluster">${group.items.length}</div>`, [42, 42])} eventHandlers={{ click: () => { setSelectedOfferId(null); setPlaceChoices(group.items); } }} />
         ))}
 
         {sos &&
@@ -168,6 +195,8 @@ export function TacticalMap(props: TacticalMapProps) {
           )}
         />
       </MapContainer>
+      {placeChoices && <MapPlaceChooser items={placeChoices} onChoose={choosePlace} onClose={() => setPlaceChoices(null)} />}
+      {selectedOffer && <HelpOfferMapPopup offer={selectedOffer} onClose={() => setSelectedOfferId(null)} />}
       {!tileUrl && <View pointerEvents="none" style={styles.tileNotice}><Text style={styles.tileNoticeText}>Basemap provider not configured · demonstration overlays only</Text></View>}
       {tileUrl && tileUnavailable && <View pointerEvents="none" style={styles.tileNotice}><Text style={styles.tileNoticeText}>Basemap unavailable · demonstration overlays only</Text></View>}
     </View>
