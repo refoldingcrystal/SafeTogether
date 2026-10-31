@@ -5,7 +5,6 @@ import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Button, Card, Pill } from '@/components/ui';
 import mock from '@/data/mock.json';
-import { demonstrationNotice } from '@/shared/demo';
 import { useApp } from '@/state/app';
 import { colors } from '@/theme';
 
@@ -17,15 +16,8 @@ export default function HelpScreen() {
     <ScrollView style={styles.root} contentContainerStyle={styles.content}>
       <View>
         <Text style={styles.title}>Help nearby</Text>
-        <Text style={styles.sub}>Offers and requests from neighbours – works offline too</Text>
+        <Text style={styles.sub}>Offers and requests from neighbours</Text>
       </View>
-
-      <Card style={{ borderLeftWidth: 4, borderLeftColor: colors.blue }}>
-        <Pill icon="megaphone" label="OFFICIAL NOTICE" color={colors.blue} bg={colors.blueSoft} />
-        <Text style={styles.cardTitle}>{demonstrationNotice.title}</Text>
-        <Text style={styles.body}>{demonstrationNotice.body}</Text>
-        <Text style={styles.meta}>{demonstrationNotice.publishedAt}</Text>
-      </Card>
 
       <Button icon="hand-left" label="Offer help" color={colors.green} onPress={() => router.push('/offer')} />
 
