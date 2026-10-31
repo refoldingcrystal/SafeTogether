@@ -7,7 +7,7 @@ import * as Location from 'expo-location';
 import { TacticalMap } from '@/components/TacticalMap';
 import { CoordinationChat, type CoordinationRequest } from '@/components/CoordinationChat';
 import { CurrentLocationButton } from '@/components/CurrentLocationButton';
-import { VoiceReportButton, guessEmergencyCategory } from '@/components/VoiceReportButton';
+import { VoiceReportButton, guessHelpRequest } from '@/components/VoiceReportButton';
 import { Button, Card, NeedHelpButton } from '@/components/ui';
 import mock from '@/data/mock.json';
 import { offlineDemoPlaces, offlineDemoRoads } from '@/data/offlineMapDemo';
@@ -252,10 +252,12 @@ export default function MapScreen() {
   }
 
   function fillFromVoice(text: string) {
-    // Voice reports default to Emergency; the person reviews everything before sending.
-    const kind = helpKind ?? 'Emergency';
+    // Respect a type the person already picked; otherwise guess it from what they said.
+    // They review everything before sending.
+    const guess = guessHelpRequest(text, helpKind ?? undefined);
+    const kind = helpKind ?? guess?.kind ?? 'Emergency';
     setHelpKind(kind);
-    if (kind === 'Emergency' && !request) setRequest(guessEmergencyCategory(text));
+    if (guess && !request) setRequest(guess.choice);
     setDetails((previous) => previous.trim() ? `${previous.trim()} ${text}` : text);
   }
 

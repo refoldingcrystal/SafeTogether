@@ -14,15 +14,27 @@ const SAMPLE_RATE = 16000;
 // After stop, wait this long at most for the last words from the live stream.
 const FINAL_WAIT_MS = 1200;
 
-const categoryKeywords: [PersonalHelpCategory, RegExp][] = [
-  ['Injured', /injur|hurt|bleed|blood|broken|wound|pain|unconscious|breath|burn|fainted/i],
-  ['Stranded', /stuck|trapped|stranded|can'?t (get )?out|cut off|flood(ed)? in|no way out/i],
-  ['Lost', /lost|missing|can'?t find|don'?t know where/i],
+type VoiceHelpKind = 'Emergency' | 'Request resources';
+type ResourceChoice = 'Food or water' | 'Shelter' | 'Transport';
+
+// Emergencies are listed first so "I'm trapped and need water" stays an emergency.
+const helpKeywords: [VoiceHelpKind, PersonalHelpCategory | ResourceChoice, RegExp][] = [
+  ['Emergency', 'Injured', /injur|hurt|bleed|blood|broken|wound|pain|unconscious|breath|burn|fainted/i],
+  ['Emergency', 'Stranded', /stuck|trapped|stranded|can'?t (get )?out|cut off|flood(ed)? in|no way out/i],
+  ['Emergency', 'Lost', /\blost\b|missing|can'?t find|don'?t know where/i],
+  ['Request resources', 'Food or water', /water|thirst|drink|food|hungry|\beat\b|starv/i],
+  ['Request resources', 'Shelter', /shelter|place to (stay|sleep)|somewhere to (stay|sleep)|\broof\b|homeless|blanket/i],
+  ['Request resources', 'Transport', /transport|\bride\b|\blift\b|\bcar\b|\bbus\b|evacuat|drive me/i],
 ];
 
-/** Picks the closest emergency category from what the person said. */
-export function guessEmergencyCategory(text: string): PersonalHelpCategory {
-  return categoryKeywords.find(([, pattern]) => pattern.test(text))?.[0] ?? 'Other personal assistance';
+/**
+ * Picks the help type and quick choice that best match what the person said.
+ * With `kind`, only choices of that type are considered (the person already picked it).
+ */
+export function guessHelpRequest(text: string, kind?: VoiceHelpKind) {
+  const match = helpKeywords.find(([matchKind, , pattern]) => (!kind || matchKind === kind) && pattern.test(text));
+  if (match) return { kind: match[0], choice: match[1] };
+  return kind ? null : { kind: 'Emergency' as const, choice: 'Other personal assistance' as const };
 }
 
 function toBase64(data: ArrayBuffer) {
