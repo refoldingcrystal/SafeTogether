@@ -11,7 +11,7 @@ const UPLOAD_DIR = path.join(DATA_DIR, 'uploads');
 const PORT = Number(process.env.PORT || 8787);
 const SECRET = process.env.SAFETOGETHER_SECRET || randomBytes(32).toString('hex');
 const MAX_BODY = 7 * 1024 * 1024;
-const emptyDb = () => ({ users: [], sessions: [], incidents: [], offers: [], helpRequests: [], messages: [], notices: [], rendezvousPoints: [], connections: [], locations: [], audit: [] });
+const emptyDb = () => ({ users: [], sessions: [], incidents: [], offers: [], helpRequests: [], messages: [], notices: [], rendezvousPoints: [], emergencySites: [], dangerZones: [], connections: [], locations: [], audit: [] });
 let db = emptyDb();
 let writes = Promise.resolve();
 
@@ -98,6 +98,10 @@ function approximate(location) {
   }
   return result;
 }
+function mapCoordinate(value) {
+  if (!value || !Number.isFinite(value.latitude) || !Number.isFinite(value.longitude) || Math.abs(value.latitude) > 90 || Math.abs(value.longitude) > 180) throw fail(400, 'Valid latitude and longitude are required');
+  return { latitude: Number(value.latitude.toFixed(5)), longitude: Number(value.longitude.toFixed(5)) };
+}
 
 const HELP_CATEGORIES = ['Shelter', 'Food and water', 'Transport', 'Qualified first aid', 'Supplies', 'Other practical help'];
 const HELP_ICONS = { 'Shelter': 'home', 'Food and water': 'water', 'Transport': 'bus', 'Qualified first aid': 'medkit', 'Supplies': 'cube', 'Other practical help': 'hand-left' };
@@ -124,7 +128,7 @@ function publicOffer(offer, viewerId) {
   return {
     id: offer.id, type: 'offer', categories, icon: HELP_ICONS[categories[0]] || 'hand-left', title: categories.join(' · '),
     author: displayName(offer.ownerId), distance: offer.approximateLocation?.label || 'Location not shared', tags: categories,
-    description: offer.description || undefined, photos: (offer.attachments || []).filter((item) => item.approved || offer.ownerId === viewerId).map((item) => publicAttachment(item).url),
+    description: offer.description || undefined, photos: (offer.attachments || []).filter((item) => item.approved).map((item) => publicAttachment(item).url),
     isMine: offer.ownerId === viewerId, status: offer.status, createdAt: offer.createdAt,
   };
 }
@@ -200,6 +204,8 @@ async function route(req, res) {
     const incidents = db.incidents.filter((item) => item.status !== 'rejected').map(publicIncident);
     const notices = db.notices.filter((item) => item.status === 'published' && (!item.expiresAt || item.expiresAt > now()));
     const rendezvousPoints = db.rendezvousPoints.filter((item) => item.status === 'active');
+    const emergencySites = db.emergencySites.filter((item) => item.status === 'active');
+    const dangerZones = db.dangerZones.filter((item) => item.status === 'active' && (!item.expiresAt || item.expiresAt > now()));
     const people = db.locations.map((item) => privateUser(item.userId)).filter(Boolean).map((person) => getLocation(person, user)).filter(Boolean);
     const heat = new Map();
     for (const incident of db.incidents.filter((item) => ['verified','in_progress','assigned'].includes(item.status))) {
@@ -207,7 +213,7 @@ async function route(req, res) {
       cell.count += 1; heat.set(key, cell);
     }
     const helpRequests = db.helpRequests.filter((item) => item.status === 'active').map(publicHelpRequest);
-    return send(res, 200, { data: { incidents, notices, rendezvousPoints, people, heatmap: [...heat.values()], helpFeed: helpFeed(user.id), helpRequests } });
+    return send(res, 200, { data: { incidents, notices, rendezvousPoints, emergencySites, dangerZones, people, heatmap: [...heat.values()], helpFeed: helpFeed(user.id), helpRequests } });
   }
 
   if (resource === 'help-feed' && method === 'GET') return send(res, 200, { data: helpFeed(user.id) });
@@ -327,6 +333,34 @@ async function route(req, res) {
   }
   if (resource === 'rendezvous' && method === 'PATCH' && recordId && user.role === 'authority') {
     const row = db.rendezvousPoints.find((p) => p.id === recordId); if (!row) throw fail(404, 'Rendezvous point not found'); const body = await readBody(req); if (['active','withdrawn','completed'].includes(body.status)) row.status = body.status; await persist(); return send(res, 200, { data: row });
+  }
+
+  if (resource === 'emergency-sites' && method === 'GET') return send(res, 200, { data: db.emergencySites.filter((site) => site.status === 'active') });
+  if (resource === 'emergency-sites' && method === 'POST' && user.role === 'authority') {
+    const body = await readBody(req); const kind = ['shelter','safe_zone','aid'].includes(body.kind) ? body.kind : null;
+    const row = { id: id('site'), kind, title: clean(body.title, 120), summary: clean(body.summary, 1000), coordinate: mapCoordinate(body.coordinate), capacity: clean(body.capacity, 120) || undefined, status: 'active', createdAt: now(), authorId: user.id, expiresAt: body.expiresAt || null };
+    if (!kind || !row.title) throw fail(400, 'A valid site kind and title are required');
+    db.emergencySites.unshift(row); audit(user.id, 'emergency_site_published', 'emergency_site', row.id); await persist(); return send(res, 201, { data: row });
+  }
+  if (resource === 'emergency-sites' && method === 'PATCH' && recordId && user.role === 'authority') {
+    const row = db.emergencySites.find((site) => site.id === recordId); if (!row) throw fail(404, 'Emergency site not found'); const body = await readBody(req);
+    if (['active','withdrawn','completed'].includes(body.status)) row.status = body.status;
+    await persist(); return send(res, 200, { data: row });
+  }
+  if (resource === 'danger-zones' && method === 'GET') return send(res, 200, { data: db.dangerZones.filter((zone) => zone.status === 'active' && (!zone.expiresAt || zone.expiresAt > now())) });
+  if (resource === 'danger-zones' && method === 'POST' && user.role === 'authority') {
+    const body = await readBody(req); const kind = ['attack','fire','flooding'].includes(body.kind) ? body.kind : null;
+    const severity = ['critical','high','medium'].includes(body.severity) ? body.severity : null;
+    const coordinate = mapCoordinate(body.coordinate); const radius = Number(body.radius);
+    const row = { id: id('zone'), kind, title: clean(body.title, 120), summary: clean(body.summary, 1000), coordinate, radius: Number.isFinite(radius) ? Math.max(25, Math.min(50000, radius)) : 500, severity, status: 'active', createdAt: now(), authorId: user.id, expiresAt: body.expiresAt || null };
+    if (!kind || !severity || !row.title) throw fail(400, 'A valid kind, severity, title, and coordinate are required');
+    db.dangerZones.unshift(row); audit(user.id, 'danger_zone_published', 'danger_zone', row.id); await persist(); return send(res, 201, { data: row });
+  }
+  if (resource === 'danger-zones' && method === 'PATCH' && recordId && user.role === 'authority') {
+    const row = db.dangerZones.find((zone) => zone.id === recordId); if (!row) throw fail(404, 'Danger zone not found'); const body = await readBody(req);
+    if (['active','withdrawn','expired'].includes(body.status)) row.status = body.status;
+    if (body.expiresAt !== undefined) row.expiresAt = body.expiresAt || null;
+    await persist(); return send(res, 200, { data: row });
   }
 
   if (resource === 'location' && method === 'PUT') {

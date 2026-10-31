@@ -81,11 +81,17 @@ export type MapSnapshot = {
   incidents: ApiIncident[];
   notices: OfficialNotice[];
   rendezvousPoints: { id: string; title: string; instructions: string; location: ApproximateLocation; status: string; expiresAt?: string | null }[];
+  emergencySites: EmergencySite[];
+  dangerZones: DangerZone[];
   people: { userId: string; location: ApproximateLocation; precision: string; updatedAt: string }[];
   heatmap: { label: string; latitude?: number; longitude?: number; count: number }[];
   helpFeed: HelpFeedItem[];
   helpRequests: HelpRequest[];
 };
+
+export type Coordinate = { latitude: number; longitude: number };
+export type EmergencySite = { id: string; kind: 'shelter' | 'safe_zone' | 'aid'; title: string; summary: string; coordinate: Coordinate; capacity?: string; status: string; expiresAt?: string | null };
+export type DangerZone = { id: string; kind: 'attack' | 'fire' | 'flooding'; title: string; summary: string; coordinate: Coordinate; radius: number; severity: 'critical' | 'high' | 'medium'; status: string; expiresAt?: string | null };
 
 async function loadToken() {
   if (tokenLoaded) return accessToken;
@@ -140,6 +146,10 @@ function post(path: string, body: unknown, authenticated = true) {
   return request(path, { method: 'POST', body: JSON.stringify(body) }, authenticated);
 }
 
+function resolveHelpFeedPhotos(items: HelpFeedItem[]) {
+  return items.map((item) => ({ ...item, photos: item.photos?.map((photo) => new URL(photo, `${API_BASE_URL}/`).toString()) }));
+}
+
 export const api = {
   async register(input: { name: string; email: string; password: string }) {
     const session = await post('/auth/register', input, false) as AuthSession;
@@ -159,8 +169,8 @@ export const api = {
 
   me: () => request<{ user: ApiUser }>('/auth/me'),
   getMap: () => request<MapSnapshot>('/map'),
-  getHelpFeed: () => request<HelpFeedItem[]>('/help-feed'),
-  getOffers: () => request<HelpOffer[]>('/offers'),
+  getHelpFeed: async () => resolveHelpFeedPhotos(await request<HelpFeedItem[]>('/help-feed')),
+  getOffers: async () => resolveHelpFeedPhotos(await request<HelpOffer[]>('/offers')) as HelpOffer[],
 
   createOffer: (input: CreateOfferInput) => post('/offers', input) as Promise<HelpOffer>,
   updateOffer: (offerId: string, input: UpdateOfferInput) => request<HelpOffer>(`/offers/${encodeURIComponent(offerId)}`, { method: 'PATCH', body: JSON.stringify(input) }),
@@ -175,10 +185,16 @@ export const api = {
   sendMessage: (requestId: string, text: string) => post(`/help-requests/${encodeURIComponent(requestId)}/messages`, { text }) as Promise<HelpMessage>,
 
   getIncidents: () => request<ApiIncident[]>('/incidents'),
-  createIncident: (input: { category: string; description: string; approximateLocation: ApproximateLocation | string; shareWithAuthorities?: boolean }) => post('/incidents', input),
+  createIncident: (input: { category: string; description: string; approximateLocation: ApproximateLocation | string; shareWithAuthorities?: boolean }) => request<{ id: string }>('/incidents', { method: 'POST', body: JSON.stringify(input) }),
   uploadIncidentPhoto: (incidentId: string, dataUrl: string) => post(`/incidents/${encodeURIComponent(incidentId)}/attachments`, { data: dataUrl }),
   getNotices: () => request<OfficialNotice[]>('/notices'),
   getRendezvousPoints: () => request<MapSnapshot['rendezvousPoints']>('/rendezvous'),
+  getEmergencySites: () => request<EmergencySite[]>('/emergency-sites'),
+  publishEmergencySite: (input: Omit<EmergencySite, 'id' | 'status'>) => post('/emergency-sites', input),
+  updateEmergencySite: (id: string, status: 'active' | 'withdrawn' | 'completed') => request<EmergencySite>(`/emergency-sites/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify({ status }) }),
+  getDangerZones: () => request<DangerZone[]>('/danger-zones'),
+  publishDangerZone: (input: Omit<DangerZone, 'id' | 'status'>) => post('/danger-zones', input),
+  updateDangerZone: (id: string, input: { status?: 'active' | 'withdrawn' | 'expired'; expiresAt?: string | null }) => request<DangerZone>(`/danger-zones/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify(input) }),
   getHeatmap: () => request<MapSnapshot['heatmap']>('/heatmap'),
 
   setLocation: (input: { location: ApproximateLocation | string; visibility: 'private' | 'connections' | 'connections_authorities' | 'everyone'; precision?: 'neighborhood' | 'district' }) =>
