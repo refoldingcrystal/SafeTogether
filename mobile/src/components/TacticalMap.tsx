@@ -2,7 +2,6 @@ import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { Platform, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { CurrentLocationButton } from '@/components/CurrentLocationButton';
-import { HelpOfferMapPopup } from '@/components/HelpOfferMapPopup';
 import { MapPlaceChooser } from '@/components/MapPlaceChooser';
 import MapView, { Circle, Marker, Polyline, UrlTile } from 'react-native-maps';
 import { Paths } from 'expo-file-system';
@@ -35,6 +34,7 @@ export type TacticalMapProps = {
   onSelect: (id: string) => void;
   onSelectDanger?: (id: string) => void;
   onSelectSite?: (id: string) => void;
+  onSelectOffer?: (id: string) => void;
   onDestinationLongPress?: (coordinate: Coordinate) => void;
 };
 
@@ -74,14 +74,13 @@ export function TacticalMap({
   onSelect,
   onSelectDanger,
   onSelectSite,
+  onSelectOffer,
   onDestinationLongPress,
 }: TacticalMapProps) {
   const map = useRef<MapView>(null);
   const [currentLocation, setCurrentLocation] = useState<Coordinate | null>(null);
-  const [selectedOfferId, setSelectedOfferId] = useState<string | null>(null);
   const [placeChoices, setPlaceChoices] = useState<MapPlaceItem[] | null>(null);
   const selected = useMemo(() => incidents.find((incident) => incident.id === selectedId), [incidents, selectedId]);
-  const selectedOffer = helpOffers.find((offer) => offer.id === selectedOfferId);
   const placeGroups = useMemo(() => {
     const items: MapPlaceItem[] = [];
     incidents.forEach((incident) => {
@@ -100,7 +99,7 @@ export function TacticalMap({
     if (item.kind === 'incident') onSelect(item.id);
     else if (item.kind === 'danger') onSelectDanger?.(item.id);
     else if (item.kind === 'site') onSelectSite?.(item.id);
-    else setSelectedOfferId(item.id);
+    else onSelectOffer?.(item.id);
   }
 
   useEffect(() => {
@@ -213,7 +212,7 @@ export function TacticalMap({
         ))}
         {helpOffers.map((offer) => (
           groupedKeys.has(`offer:${offer.id}`) ? null :
-          <Marker key={offer.id} coordinate={offer.coordinate} zIndex={35} tracksViewChanges={false} onPress={() => setSelectedOfferId(offer.id)}>
+          <Marker key={offer.id} coordinate={offer.coordinate} zIndex={35} tracksViewChanges={false} onPress={() => onSelectOffer?.(offer.id)}>
             <View style={styles.offerMarker}>
               <Ionicons name="medkit" size={15} color="#fff" />
               <Text style={styles.offerMarkerLabel}>OFFER</Text>
@@ -221,7 +220,7 @@ export function TacticalMap({
           </Marker>
         ))}
         {placeGroups.map((group) => (
-          <Marker key={group.key} coordinate={group.coordinate} zIndex={120} tracksViewChanges={false} onPress={() => { setSelectedOfferId(null); setPlaceChoices(group.items); }}>
+          <Marker key={group.key} coordinate={group.coordinate} zIndex={120} tracksViewChanges={false} onPress={() => setPlaceChoices(group.items)}>
             <View style={styles.placeGroupMarker}><Ionicons name="layers" size={15} color="#fff" /><Text style={styles.placeGroupCount}>{group.items.length}</Text></View>
           </Marker>
         ))}
@@ -254,7 +253,6 @@ export function TacticalMap({
         map.current?.animateToRegion(regionAround(coordinate), 650);
       }} />
       <MapPlaceChooser visible={placeChoices !== null} items={placeChoices ?? []} onChoose={choosePlace} onClose={() => setPlaceChoices(null)} />
-      {selectedOffer && <HelpOfferMapPopup offer={selectedOffer} onClose={() => setSelectedOfferId(null)} />}
       <View pointerEvents="none" style={styles.attribution}><Text style={styles.attributionText}>© OpenStreetMap contributors</Text></View>
     </View>
   );

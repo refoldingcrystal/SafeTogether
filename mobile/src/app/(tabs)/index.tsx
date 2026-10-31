@@ -30,6 +30,7 @@ export default function MapScreen() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [selectedDangerId, setSelectedDangerId] = useState<string | null>(null);
   const [selectedSiteId, setSelectedSiteId] = useState<string | null>(null);
+  const [selectedOfferId, setSelectedOfferId] = useState<string | null>(null);
   const [customDestination, setCustomDestination] = useState<Coordinate | null>(null);
   const [safeRoute, setSafeRoute] = useState<SafeRoute | null>(null);
   const [routeLoading, setRouteLoading] = useState(false);
@@ -290,16 +291,25 @@ export default function MapScreen() {
           setSelectedId((current) => current === id ? null : id);
           setSelectedDangerId(null);
           setSelectedSiteId(null);
+          setSelectedOfferId(null);
         }}
         onSelectDanger={(id) => {
           setSelectedDangerId((current) => current === id ? null : id);
           setSelectedId(null);
           setSelectedSiteId(null);
+          setSelectedOfferId(null);
         }}
         onSelectSite={(id) => {
           setSelectedSiteId((current) => current === id ? null : id);
           setSelectedId(null);
           setSelectedDangerId(null);
+          setSelectedOfferId(null);
+        }}
+        onSelectOffer={(id) => {
+          setSelectedOfferId((current) => current === id ? null : id);
+          setSelectedId(null);
+          setSelectedDangerId(null);
+          setSelectedSiteId(null);
         }}
         onDestinationLongPress={(coordinate) => {
           if (app.offline) {
@@ -313,6 +323,7 @@ export default function MapScreen() {
           setSelectedId(null);
           setSelectedDangerId(null);
           setSelectedSiteId(null);
+          setSelectedOfferId(null);
           void calculateRoute(mapLocation, coordinate);
         }}
       />
@@ -370,6 +381,7 @@ export default function MapScreen() {
           selectedIncident={allIncidents.find((incident) => incident.id === selectedId)}
           selectedDanger={dangerZones.find((zone) => zone.id === selectedDangerId)}
           selectedSite={sites.find((site) => site.id === selectedSiteId) ?? offlineDemoPlaces.find((site) => site.id === selectedSiteId)}
+          selectedOffer={helpOffers.find((offer) => offer.id === selectedOfferId)}
           safeRoute={safeRoute}
           routeLoading={routeLoading}
           routeError={routeError}
@@ -394,6 +406,7 @@ export default function MapScreen() {
             setNavigationActive(false);
           }}
         onChat={(incident) => setActiveChat({ id: incident.id, author: incident.reporterName, title: incident.category })}
+          onChatOffer={(offer) => setActiveChat({ id: offer.id, author: offer.author, title: offer.title })}
           navigationActive={navigationActive}
           navigationStep={navigationStep}
           onStartNavigation={() => { setNavigationStep(0); setNavigationActive(true); }}
@@ -406,6 +419,7 @@ export default function MapScreen() {
             setSelectedId(null);
             setSelectedDangerId(null);
             setSelectedSiteId(null);
+            setSelectedOfferId(null);
           }}
         />
       </View>
@@ -488,6 +502,7 @@ function BottomCard({
   selectedIncident,
   selectedDanger,
   selectedSite,
+  selectedOffer,
   safeRoute,
   routeLoading,
   routeError,
@@ -498,6 +513,7 @@ function BottomCard({
   onPlanSite,
   onCloseRoute,
   onChat,
+  onChatOffer,
   navigationActive,
   navigationStep,
   onStartNavigation,
@@ -508,6 +524,7 @@ function BottomCard({
   selectedIncident?: Incident;
   selectedDanger?: DangerZone;
   selectedSite?: EmergencySite;
+  selectedOffer?: MapHelpOffer;
   safeRoute: SafeRoute | null;
   routeLoading: boolean;
   routeError: string | null;
@@ -518,6 +535,7 @@ function BottomCard({
   onPlanSite: (site: EmergencySite) => void;
   onCloseRoute: () => void;
   onChat: (incident: Incident) => void;
+  onChatOffer: (offer: MapHelpOffer) => void;
   navigationActive: boolean;
   navigationStep: number;
   onStartNavigation: () => void;
@@ -630,6 +648,28 @@ function BottomCard({
           <Text style={styles.body}>{selectedSite.summary}</Text>
           {selectedSite.capacity && <Text style={styles.muted}>{selectedSite.capacity}</Text>}
           <Button icon="navigate" label="Plan safe route here" color={colors.green} onPress={() => onPlanSite(selectedSite)} />
+        </Card>
+      </Animated.View>
+    );
+  }
+
+  if (selectedOffer) {
+    return (
+      <Animated.View entering={FadeInDown} key={selectedOffer.id}>
+        <Card style={{ borderLeftWidth: 5, borderLeftColor: colors.green }}>
+          <View style={styles.row}>
+            <View style={[styles.incidentIcon, { backgroundColor: colors.green }]}>
+              <Ionicons name="hand-left" size={21} color="#fff" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.kicker, { color: colors.green }]}>HELP OFFER</Text>
+              <Text style={styles.title}>{selectedOffer.title}</Text>
+            </View>
+            <Pressable onPress={onClose} accessibilityRole="button" accessibilityLabel="Close" hitSlop={10}><Ionicons name="close" size={22} color={colors.textDim} /></Pressable>
+          </View>
+          <Text style={styles.muted}>Offered by {selectedOffer.author} · {selectedOffer.distance}</Text>
+          {selectedOffer.description && <Text style={styles.body}>{selectedOffer.description}</Text>}
+          <Button icon="chatbubble-ellipses" label="Chat" color={colors.blue} onPress={() => onChatOffer(selectedOffer)} />
         </Card>
       </Animated.View>
     );

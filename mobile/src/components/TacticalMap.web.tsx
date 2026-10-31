@@ -4,7 +4,6 @@ import { useEffect, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import L from 'leaflet';
 import { Circle, MapContainer, Marker, Polyline, TileLayer, useMap } from 'react-leaflet';
-import { HelpOfferMapPopup } from '@/components/HelpOfferMapPopup';
 import { MapPlaceChooser } from '@/components/MapPlaceChooser';
 import { CurrentLocationButton } from '@/components/CurrentLocationButton';
 import mock from '@/data/mock.json';
@@ -63,10 +62,8 @@ function Camera({ shelling, sos, route, incidents, selectedId, userLocation = mo
 export function TacticalMap(props: TacticalMapProps) {
   const [tileUnavailable, setTileUnavailable] = useState(false);
   const [placeChoices, setPlaceChoices] = useState<MapPlaceItem[] | null>(null);
-  const [selectedOfferId, setSelectedOfferId] = useState<string | null>(null);
   const [currentLocation, setCurrentLocation] = useState<LatLng | null>(null);
-  const { shelling, sos, route, showBasement, showCommunityReports = true, incidents, selectedId, onSelect, dangerZones = [], emergencySites = [], nearbyPeople = [], helpOffers = [], plannedRoute, userLocation = mock.me, onSelectDanger, onSelectSite } = props;
-  const selectedOffer = helpOffers.find((offer) => offer.id === selectedOfferId);
+  const { shelling, sos, route, showBasement, showCommunityReports = true, incidents, selectedId, onSelect, dangerZones = [], emergencySites = [], nearbyPeople = [], helpOffers = [], plannedRoute, userLocation = mock.me, onSelectDanger, onSelectSite, onSelectOffer } = props;
   const placeGroups = groupMapPlaces([
     ...incidents.flatMap((incident) => {
       const coordinate = incidentPoint(incident);
@@ -83,7 +80,7 @@ export function TacticalMap(props: TacticalMapProps) {
     if (item.kind === 'incident') onSelect(item.id);
     else if (item.kind === 'danger') onSelectDanger?.(item.id);
     else if (item.kind === 'site') onSelectSite?.(item.id);
-    else setSelectedOfferId(item.id);
+    else onSelectOffer?.(item.id);
   }
 
   return (
@@ -165,10 +162,10 @@ export function TacticalMap(props: TacticalMapProps) {
         ))}
         {helpOffers.map((offer) => (
           groupedKeys.has(`offer:${offer.id}`) ? null :
-          <Marker key={offer.id} position={ll(offer.coordinate)} icon={icon('<div class="m-offer">＋<div class="m-label">HELP OFFER</div></div>', [38, 38])} eventHandlers={{ click: () => setSelectedOfferId(offer.id) }} />
+          <Marker key={offer.id} position={ll(offer.coordinate)} icon={icon('<div class="m-offer">＋<div class="m-label">HELP OFFER</div></div>', [38, 38])} eventHandlers={{ click: () => onSelectOffer?.(offer.id) }} />
         ))}
         {placeGroups.map((group) => (
-          <Marker key={group.key} position={ll(group.coordinate)} zIndexOffset={2000} icon={icon(`<div class="m-cluster">${group.items.length}</div>`, [42, 42])} eventHandlers={{ click: () => { setSelectedOfferId(null); setPlaceChoices(group.items); } }} />
+          <Marker key={group.key} position={ll(group.coordinate)} zIndexOffset={2000} icon={icon(`<div class="m-cluster">${group.items.length}</div>`, [42, 42])} eventHandlers={{ click: () => setPlaceChoices(group.items) }} />
         ))}
 
         {nearbyPeople.map((person) => (
@@ -198,7 +195,6 @@ export function TacticalMap(props: TacticalMapProps) {
       </MapContainer>
       <CurrentLocationButton onLocation={setCurrentLocation} />
       <MapPlaceChooser visible={placeChoices !== null} items={placeChoices ?? []} onChoose={choosePlace} onClose={() => setPlaceChoices(null)} />
-      {selectedOffer && <HelpOfferMapPopup offer={selectedOffer} onClose={() => setSelectedOfferId(null)} />}
     </View>
   );
 }
