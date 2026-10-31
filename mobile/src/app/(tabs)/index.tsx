@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
 import { router } from 'expo-router';
@@ -7,13 +7,23 @@ import { TacticalMap } from '@/components/TacticalMap';
 import { Button, Card, Pill, SOSButton, StatusBadge } from '@/components/ui';
 import mock from '@/data/mock.json';
 import { categoryIcons, incidentColors, incidentGuide } from '@/icons';
-import { demonstrationIncidents } from '@/shared/demo';
+import { demonstrationIncidents, demonstrationNotice } from '@/shared/demo';
 import { useApp } from '@/state/app';
 import { colors, radius, shadow } from '@/theme';
 
 export default function MapScreen() {
   const app = useApp();
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [filter, setFilter] = useState<MapFilter>('all');
+  const incidents = useMemo(
+    () =>
+      demonstrationIncidents.filter((incident) => {
+        if (filter === 'verified') return incident.verificationStatus === 'verified';
+        if (filter === 'review') return incident.verificationStatus !== 'verified';
+        return true;
+      }),
+    [filter],
+  );
 
   return (
     <View style={styles.root}>
@@ -22,7 +32,8 @@ export default function MapScreen() {
         sos={app.sos}
         route={app.route}
         showBasement={app.p2pReceived}
-        incidents={demonstrationIncidents}
+        offline={app.offline}
+        incidents={incidents}
         selectedId={selectedId}
         onSelect={setSelectedId}
       />
@@ -49,6 +60,27 @@ export default function MapScreen() {
           <Pill icon="lock-closed" label="Location private · visible only to your family (3)" color={colors.blue} bg={colors.blueSoft} />
         )}
 
+        <View style={[styles.connectivity, app.offline ? styles.connectivityOffline : styles.connectivityOnline]}>
+          <Ionicons name={app.offline ? 'cloud-offline-outline' : 'cloud-done-outline'} size={16} color={app.offline ? colors.orange : colors.green} />
+          <Text style={[styles.connectivityText, { color: app.offline ? colors.orange : colors.green }]}>
+            {app.offline ? 'Offline demo · showing saved incident data' : 'Online · OpenStreetMap tiles loading'}
+          </Text>
+        </View>
+
+        <View style={styles.officialNotice}>
+          <Ionicons name="megaphone" size={17} color={colors.blue} />
+          <View style={{ flex: 1 }}>
+            <Text style={styles.officialKicker}>OFFICIAL NOTICE · DEMONSTRATION</Text>
+            <Text style={styles.officialTitle}>{demonstrationNotice.title}</Text>
+          </View>
+        </View>
+
+        <View style={styles.filters} accessibilityRole="radiogroup" accessibilityLabel="Incident filters">
+          <FilterChip label="All incidents" active={filter === 'all'} onPress={() => selectFilter('all', setFilter, setSelectedId)} />
+          <FilterChip label="Verified" active={filter === 'verified'} onPress={() => selectFilter('verified', setFilter, setSelectedId)} />
+          <FilterChip label="Needs review" active={filter === 'review'} onPress={() => selectFilter('review', setFilter, setSelectedId)} />
+        </View>
+
         {app.shelling && (
           <Animated.View entering={FadeInUp} style={styles.alert}>
             <Ionicons name="warning" size={22} color="#fff" />
@@ -69,6 +101,21 @@ export default function MapScreen() {
         <BottomCard selectedId={selectedId} onClose={() => setSelectedId(null)} />
       </View>
     </View>
+  );
+}
+
+type MapFilter = 'all' | 'verified' | 'review';
+
+function selectFilter(filter: MapFilter, setFilter: (filter: MapFilter) => void, setSelectedId: (id: string | null) => void) {
+  setFilter(filter);
+  setSelectedId(null);
+}
+
+function FilterChip({ label, active, onPress }: { label: string; active: boolean; onPress: () => void }) {
+  return (
+    <Pressable accessibilityRole="radio" accessibilityState={{ selected: active }} onPress={onPress} style={[styles.filterChip, active && styles.filterChipActive]}>
+      <Text style={[styles.filterText, active && styles.filterTextActive]}>{label}</Text>
+    </Pressable>
   );
 }
 
@@ -220,6 +267,18 @@ const styles = StyleSheet.create({
   },
   alertTitle: { color: '#fff', fontWeight: '900', fontSize: 13 },
   alertText: { color: '#fff', fontSize: 12, marginTop: 2 },
+  connectivity: { flexDirection: 'row', alignItems: 'center', gap: 6, borderRadius: radius.pill, alignSelf: 'flex-start', paddingHorizontal: 10, paddingVertical: 6, ...shadow },
+  connectivityOnline: { backgroundColor: colors.card },
+  connectivityOffline: { backgroundColor: colors.orangeSoft },
+  connectivityText: { fontSize: 11, fontWeight: '800' },
+  officialNotice: { flexDirection: 'row', alignItems: 'center', gap: 9, backgroundColor: colors.card, borderLeftWidth: 4, borderLeftColor: colors.blue, borderRadius: radius.md, padding: 10, ...shadow },
+  officialKicker: { color: colors.blue, fontSize: 10, fontWeight: '900', letterSpacing: 0.7 },
+  officialTitle: { color: colors.text, fontSize: 12, fontWeight: '700', marginTop: 1 },
+  filters: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
+  filterChip: { backgroundColor: colors.card, borderColor: colors.border, borderWidth: 1, borderRadius: radius.pill, paddingHorizontal: 10, paddingVertical: 7, ...shadow },
+  filterChipActive: { backgroundColor: colors.blue, borderColor: colors.blue },
+  filterText: { color: colors.textMuted, fontSize: 11, fontWeight: '800' },
+  filterTextActive: { color: '#fff' },
   bottom: { position: 'absolute', left: 0, right: 0, bottom: 0, padding: 12 },
   sosRow: { alignItems: 'flex-end', marginBottom: 4 },
   kicker: { fontSize: 11, fontWeight: '800', letterSpacing: 0.8, color: colors.textDim },

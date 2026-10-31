@@ -1,61 +1,164 @@
-import { Pressable, StyleSheet, View } from 'react-native';
+import { Fragment, useEffect, useMemo, useRef } from 'react';
+import { Platform, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import MapView, { Circle, Marker, Polyline, UrlTile } from 'react-native-maps';
 import mock from '@/data/mock.json';
 import { categoryIcons, incidentColors } from '@/icons';
 import type { Incident } from '@/shared/models';
 import type { Route } from '@/state/app';
-import { colors } from '@/theme';
+import { colors, shadow } from '@/theme';
 
 export type TacticalMapProps = {
   shelling: boolean;
   sos: boolean;
   route: Route;
   showBasement: boolean;
+  offline?: boolean;
   incidents: Incident[];
   selectedId: string | null;
   onSelect: (id: string) => void;
 };
 
-/** Native placeholder until the team picks a React Native OpenStreetMap renderer; web uses TacticalMap.web.tsx. */
-export function TacticalMap({ shelling, sos, incidents, selectedId, onSelect }: TacticalMapProps) {
-  const toPercent = (lat: number, lng: number) => ({
-    left: `${50 + (lng - mock.me.longitude) * 1500}%`,
-    top: `${50 - (lat - mock.me.latitude) * 2500}%`,
-  });
+type Coordinate = { latitude: number; longitude: number };
+
+const MAP_REGION = { latitude: 52.225, longitude: 20.995, latitudeDelta: 0.065, longitudeDelta: 0.11 };
+const precisionRadius = { district: 450, neighborhood: 320, landmark: 200 } as const;
+const nearby = Array.from({ length: 16 }, (_, i) => ({
+  latitude: mock.me.latitude + Math.sin(i * 2.4) * 0.004 * (0.4 + (i % 4) / 4),
+  longitude: mock.me.longitude + Math.cos(i * 2.4) * 0.0065 * (0.4 + (i % 3) / 3),
+}));
+
+function incidentPoint(incident: Incident): Coordinate | null {
+  const { latitude, longitude } = incident.approximateLocation;
+  return latitude == null || longitude == null ? null : { latitude, longitude };
+}
+
+function regionAround(point: Coordinate, delta = 0.018) {
+  return { ...point, latitudeDelta: delta, longitudeDelta: delta };
+}
+
+/** Native OpenStreetMap implementation; the web build resolves TacticalMap.web.tsx. */
+export function TacticalMap({ shelling, sos, route, showBasement, offline = false, incidents, selectedId, onSelect }: TacticalMapProps) {
+  const map = useRef<MapView>(null);
+  const selected = useMemo(() => incidents.find((incident) => incident.id === selectedId), [incidents, selectedId]);
+
+  useEffect(() => {
+    const selectedPoint = selected ? incidentPoint(selected) : null;
+    if (route === 'basement') {
+      map.current?.fitToCoordinates(mock.basementRoute, { edgePadding: { top: 130, right: 48, bottom: 300, left: 48 }, animated: true });
+    } else if (route === 'evacuation') {
+      map.current?.fitToCoordinates([mock.me, mock.evacuation.coordinate], { edgePadding: { top: 130, right: 48, bottom: 300, left: 48 }, animated: true });
+    } else if (shelling || sos) {
+      map.current?.animateToRegion(regionAround(mock.me, 0.026), 650);
+    } else if (selectedPoint) {
+      map.current?.animateToRegion(regionAround(selectedPoint), 550);
+    }
+  }, [route, selected, shelling, sos]);
 
   return (
-    <View style={styles.map}>
-      <View style={styles.river} />
-      <View style={styles.roadHorizontal} />
-      <View style={styles.roadVertical} />
-      {shelling && <View style={[styles.shelling, toPercent(mock.shelling.epicenter.latitude, mock.shelling.epicenter.longitude) as object]} />}
-      {incidents.map((incident) => {
-        const { latitude, longitude } = incident.approximateLocation;
-        if (latitude == null || longitude == null) return null;
-        const color = incidentColors[incident.category] ?? colors.blue;
-        return (
-          <Pressable
-            key={incident.id}
-            onPress={() => onSelect(incident.id)}
-            accessibilityRole="button"
-            style={[styles.marker, toPercent(latitude, longitude) as object, { backgroundColor: color }, incident.id === selectedId && styles.markerSelected]}
-          >
-            <Ionicons name={categoryIcons[incident.category] ?? 'alert'} size={16} color="#fff" />
-          </Pressable>
-        );
-      })}
-      <View style={[styles.me, toPercent(mock.me.latitude, mock.me.longitude) as object, { backgroundColor: sos ? colors.red : colors.blue }]} />
+    <View style={styles.root} accessibilityLabel="Demonstration map powered by OpenStreetMap">
+      <MapView
+        ref={map}
+        style={StyleSheet.absoluteFill}
+        initialRegion={MAP_REGION}
+        mapType={Platform.OS === 'android' ? 'none' : 'standard'}
+        rotateEnabled={false}
+        pitchEnabled={false}
+        showsCompass={false}
+        toolbarEnabled={false}
+      >
+        <UrlTile
+          urlTemplate="https://tile.openstreetmap.org/{z}/{x}/{y}.png"
+          maximumZ={19}
+          shouldReplaceMapContent={Platform.OS === 'ios'}
+          offlineMode={offline}
+          zIndex={0}
+        />
+
+        {incidents.map((incident) => {
+          const coordinate = incidentPoint(incident);
+          if (!coordinate) return null;
+          const color = incidentColors[incident.category] ?? colors.blue;
+          const isSelected = incident.id === selectedId;
+          return (
+            <Fragment key={incident.id}>
+              <Circle center={coordinate} radius={precisionRadius[incident.approximateLocation.precision]} strokeColor={color} strokeWidth={isSelected ? 2.5 : 1.25} fillColor={`${color}20`} zIndex={1} />
+              <Marker coordinate={coordinate} onPress={() => onSelect(incident.id)} zIndex={isSelected ? 50 : 10}>
+                <View style={[styles.incidentMarker, { backgroundColor: color }, isSelected && styles.incidentMarkerSelected]}>
+                  <Ionicons name={categoryIcons[incident.category] ?? 'alert'} size={16} color="#fff" />
+                </View>
+              </Marker>
+            </Fragment>
+          );
+        })}
+
+        {shelling && (
+          <>
+            {[1, 0.72, 0.44].map((factor) => (
+              <Circle key={factor} center={mock.shelling.epicenter} radius={mock.shelling.radius * factor} strokeColor={factor === 1 ? colors.red : 'transparent'} strokeWidth={2} fillColor="rgba(217, 45, 32, 0.12)" zIndex={2} />
+            ))}
+            <Marker coordinate={mock.shelling.epicenter} zIndex={40} tracksViewChanges={false}>
+              <View style={styles.alertMarker}>
+                <Ionicons name="warning" size={15} color="#fff" />
+                <Text style={styles.alertMarkerText}>SHELLING</Text>
+              </View>
+            </Marker>
+          </>
+        )}
+
+        {route === null && <Polyline coordinates={[mock.me, mock.evacuation.coordinate]} strokeColor={colors.green} strokeWidth={2} lineDashPattern={[5, 7]} zIndex={3} />}
+        {route === 'evacuation' && <RouteLine points={[mock.me, mock.evacuation.coordinate]} />}
+        {route === 'basement' && <RouteLine points={mock.basementRoute} />}
+
+        <Marker coordinate={mock.evacuation.coordinate} title={mock.evacuation.name} description={`${mock.evacuation.capacity} · ${mock.evacuation.authority}`} zIndex={20}>
+          <View style={styles.evacuationMarker}><Ionicons name="medical" size={20} color="#fff" /></View>
+        </Marker>
+        {mock.family.map((person) => (
+          <Marker key={person.id} coordinate={person.coordinate} title={`${person.name} · ${person.status}`} zIndex={15}>
+            <View style={[styles.familyMarker, { backgroundColor: person.color }]}><Text style={styles.familyInitials}>{person.initials}</Text></View>
+          </Marker>
+        ))}
+        {showBasement && (
+          <Marker coordinate={mock.basement.coordinate} title="Safe basement" description={`${mock.basement.author} · ${mock.basement.street}`} zIndex={22}>
+            <View style={styles.basementMarker}><Ionicons name="home" size={18} color="#fff" /></View>
+          </Marker>
+        )}
+        {sos && nearby.map((coordinate, index) => (
+          <Marker key={index} coordinate={coordinate} tracksViewChanges={false} tappable={false} zIndex={4}><View style={styles.nearbyDot} /></Marker>
+        ))}
+        {sos && mock.authorities.map((authority) => (
+          <Marker key={authority.id} coordinate={authority.coordinate} title={authority.label} zIndex={25}>
+            <View style={[styles.authorityMarker, { backgroundColor: authority.color }]}><Text style={styles.authorityLabel}>{authority.label}</Text></View>
+          </Marker>
+        ))}
+        <Marker coordinate={mock.me} zIndex={100} tracksViewChanges={false}>
+          <View style={[styles.meMarker, sos && styles.meMarkerSos]}><Ionicons name={sos ? 'radio' : 'person'} size={12} color="#fff" /></View>
+        </Marker>
+      </MapView>
+      <View pointerEvents="none" style={styles.attribution}><Text style={styles.attributionText}>© OpenStreetMap contributors</Text></View>
     </View>
   );
 }
 
+function RouteLine({ points }: { points: Coordinate[] }) {
+  return <><Polyline coordinates={points} strokeColor="rgba(7, 148, 85, 0.25)" strokeWidth={10} zIndex={3} /><Polyline coordinates={points} strokeColor={colors.green} strokeWidth={4} lineDashPattern={[10, 8]} zIndex={4} /></>;
+}
+
 const styles = StyleSheet.create({
-  map: { ...StyleSheet.absoluteFill, backgroundColor: '#EEF1F4' },
-  river: { position: 'absolute', right: '12%', top: -20, bottom: -20, width: 46, backgroundColor: '#D6E6EE', transform: [{ rotate: '14deg' }] },
-  roadHorizontal: { position: 'absolute', left: 0, right: 0, top: '45%', height: 8, backgroundColor: '#fff' },
-  roadVertical: { position: 'absolute', top: 0, bottom: 0, left: '45%', width: 8, backgroundColor: '#fff' },
-  shelling: { position: 'absolute', width: 180, height: 180, marginLeft: -90, marginTop: -90, borderRadius: 90, backgroundColor: 'rgba(217,45,32,0.22)', borderWidth: 2, borderColor: colors.red, borderStyle: 'dashed' },
-  marker: { position: 'absolute', width: 34, height: 34, marginLeft: -17, marginTop: -17, borderRadius: 17, alignItems: 'center', justifyContent: 'center', borderWidth: 3, borderColor: '#fff' },
-  markerSelected: { transform: [{ scale: 1.2 }] },
-  me: { position: 'absolute', width: 22, height: 22, marginLeft: -11, marginTop: -11, borderRadius: 11, borderWidth: 4, borderColor: '#fff' },
+  root: { ...StyleSheet.absoluteFill, backgroundColor: '#EEF1F4' },
+  incidentMarker: { width: 34, height: 34, borderRadius: 17, borderWidth: 3, borderColor: '#fff', alignItems: 'center', justifyContent: 'center', ...shadow },
+  incidentMarkerSelected: { transform: [{ scale: 1.2 }], borderColor: '#101828' },
+  alertMarker: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: colors.red, borderRadius: 7, paddingHorizontal: 8, paddingVertical: 5, ...shadow },
+  alertMarkerText: { color: '#fff', fontSize: 10, fontWeight: '900', letterSpacing: 0.7 },
+  evacuationMarker: { width: 38, height: 38, borderRadius: 11, borderWidth: 3, borderColor: '#fff', backgroundColor: colors.green, alignItems: 'center', justifyContent: 'center', ...shadow },
+  familyMarker: { width: 34, height: 34, borderRadius: 17, borderWidth: 3, borderColor: '#fff', alignItems: 'center', justifyContent: 'center', ...shadow },
+  familyInitials: { color: '#fff', fontWeight: '900', fontSize: 14 },
+  basementMarker: { width: 36, height: 36, borderRadius: 18, borderWidth: 3, borderColor: '#fff', backgroundColor: colors.orange, alignItems: 'center', justifyContent: 'center', ...shadow },
+  nearbyDot: { width: 10, height: 10, borderRadius: 5, borderWidth: 2, borderColor: '#fff', backgroundColor: colors.textMuted },
+  authorityMarker: { borderRadius: 7, borderWidth: 2, borderColor: '#fff', paddingHorizontal: 7, paddingVertical: 4, ...shadow },
+  authorityLabel: { color: '#fff', fontSize: 10, fontWeight: '800' },
+  meMarker: { width: 26, height: 26, borderRadius: 13, borderWidth: 4, borderColor: '#fff', backgroundColor: colors.blue, alignItems: 'center', justifyContent: 'center', ...shadow },
+  meMarkerSos: { backgroundColor: colors.red, transform: [{ scale: 1.15 }] },
+  attribution: { position: 'absolute', right: 5, bottom: 5, backgroundColor: 'rgba(255,255,255,0.86)', borderRadius: 3, paddingHorizontal: 4, paddingVertical: 2 },
+  attributionText: { fontSize: 8, color: colors.textMuted },
 });
