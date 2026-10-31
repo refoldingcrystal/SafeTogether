@@ -52,7 +52,7 @@ export default function MapScreen() {
       setSites(mapSites);
       setHelpOffers(snapshot.helpFeed.flatMap((item) => {
         const location = item.approximateLocation;
-        if (item.type !== 'offer' || item.isMine || location?.latitude == null || location.longitude == null) return [];
+        if (item.type !== 'offer' || location?.latitude == null || location.longitude == null) return [];
         return [{ id: item.id, title: item.title, description: item.description, author: item.author, distance: item.distance, coordinate: { latitude: location.latitude, longitude: location.longitude } }];
       }));
       setAllIncidents(snapshot.incidents.map((item) => ({
