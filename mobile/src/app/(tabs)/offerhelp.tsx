@@ -70,6 +70,10 @@ export default function HelpScreen() {
       Alert.alert('Choose what you can offer', 'Select at least one type of help.');
       return;
     }
+    if (offerLocation?.latitude == null || offerLocation.longitude == null) {
+      Alert.alert('Set a map location', 'Use your current location so people can find this offer on the map.');
+      return;
+    }
     try {
       const offer = editingOfferId
         ? await api.updateOffer(editingOfferId, { categories: selectedCategories, description: description.trim(), approximateLocation: offerLocation })
@@ -231,7 +235,8 @@ function OfferHelpModal({
               })}
             </View>
 
-            <ApproximateLocationPicker value={offerLocation} onChange={onChangeLocation} optional />
+            <ApproximateLocationPicker value={offerLocation} onChange={onChangeLocation} />
+            <Text style={styles.mapLocationHint}>Use current location to place this offer on other people’s maps. Typed locations can’t create a map pin.</Text>
 
             <View style={styles.fieldGroup}>
               <Text style={styles.sectionLabel}>DESCRIPTION <Text style={styles.optional}>(OPTIONAL)</Text></Text>
@@ -251,7 +256,7 @@ function OfferHelpModal({
           </ScrollView>
 
           <View style={styles.modalActions}>
-            <Button label={editing ? 'Save changes' : 'Publish offer'} icon={editing ? 'checkmark' : 'hand-left'} color={colors.green} onPress={onPublish} />
+            <Button label={editing ? 'Save changes' : 'Publish offer'} icon={editing ? 'checkmark' : 'hand-left'} color={colors.green} disabled={!selectedCategories.length || offerLocation?.latitude == null || offerLocation.longitude == null} onPress={onPublish} />
             <Pressable onPress={onClose} style={styles.cancelButton} accessibilityRole="button">
               <Text style={styles.cancelText}>Cancel</Text>
             </Pressable>
@@ -414,6 +419,7 @@ const styles = StyleSheet.create({
   modalContent: { paddingHorizontal: 20, paddingBottom: 16, gap: 18 },
   sectionLabel: { color: colors.textDim, fontSize: 11, fontWeight: '800', letterSpacing: 0.7, marginBottom: 9 },
   optional: { color: colors.textDim, fontWeight: '600', letterSpacing: 0.2 },
+  mapLocationHint: { color: colors.textMuted, fontSize: 12, lineHeight: 17 },
   categoryGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   categoryOption: { minHeight: 42, flexDirection: 'row', alignItems: 'center', gap: 7, borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, paddingHorizontal: 10, paddingVertical: 8, backgroundColor: colors.card },
   categoryOptionSelected: { borderColor: colors.green, backgroundColor: colors.greenSoft },

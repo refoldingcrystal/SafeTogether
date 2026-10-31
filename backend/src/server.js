@@ -141,6 +141,11 @@ function requestCategories(body) {
   return categories;
 }
 function optionalLocation(location) { return location ? approximate(location) : null; }
+function offerMapLocation(location) {
+  const result = approximate(location);
+  if (result.latitude === undefined || result.longitude === undefined) throw fail(400, 'A map location with latitude and longitude is required for help offers');
+  return result;
+}
 function publicAttachment(attachment) { return { id: attachment.id, mimeType: attachment.mimeType, url: `/v1/attachments/${attachment.id}` }; }
 function displayName(userId) { return db.users.find((u) => u.id === userId)?.name || 'Community member'; }
 function publicOffer(offer, viewerId) {
@@ -330,7 +335,7 @@ async function route(req, res) {
   if (resource === 'offers' && method === 'GET' && parts.length === 2) return send(res, 200, { data: db.offers.filter((o) => o.status === 'active').map((offer) => publicOffer(offer, user.id)) });
   if (resource === 'offers' && method === 'POST' && parts.length === 2) {
     const body = await readBody(req); const categories = helpCategories(body); const description = clean(body.description, 1000);
-    const row = { id: id('off'), categories, category: categories[0], description, approximateLocation: optionalLocation(body.approximateLocation), availability: clean(body.availability, 100), capacity: clean(body.capacity, 100), status: 'active', createdAt: now(), updatedAt: now(), ownerId: user.id };
+    const row = { id: id('off'), categories, category: categories[0], description, approximateLocation: offerMapLocation(body.approximateLocation), availability: clean(body.availability, 100), capacity: clean(body.capacity, 100), status: 'active', createdAt: now(), updatedAt: now(), ownerId: user.id };
     db.offers.unshift(row); audit(user.id, 'offer_created', 'help_offer', row.id); await persist(); return send(res, 201, { data: publicOffer(row, user.id) });
   }
   if (resource === 'offers' && method === 'PATCH' && recordId) {
@@ -339,7 +344,7 @@ async function route(req, res) {
     const body = await readBody(req);
     if (body.categories !== undefined || body.category !== undefined) { row.categories = helpCategories(body); row.category = row.categories[0]; }
     if (body.description !== undefined) row.description = clean(body.description, 1000);
-    if (body.approximateLocation !== undefined) row.approximateLocation = optionalLocation(body.approximateLocation);
+    if (body.approximateLocation !== undefined) row.approximateLocation = offerMapLocation(body.approximateLocation);
     if (body.availability !== undefined) row.availability = clean(body.availability, 100);
     if (body.capacity !== undefined) row.capacity = clean(body.capacity, 100);
     if (['active','withdrawn','expired'].includes(body.status)) row.status = body.status;
