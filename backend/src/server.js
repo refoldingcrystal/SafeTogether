@@ -303,6 +303,16 @@ async function route(req, res) {
     db.incidents.unshift(row); audit(user.id, 'incident_submitted', 'incident', row.id); await persist();
     return send(res, 201, { data: { id: row.id, category, description, approximateLocation: row.approximateLocation, submittedAt: row.submittedAt, status: row.status, verificationStatus: row.verificationStatus } });
   }
+  if (resource === 'incidents' && method === 'DELETE' && recordId) {
+    const index = db.incidents.findIndex((incident) => incident.id === recordId);
+    if (index === -1) return send(res, 204, {});
+    const incident = db.incidents[index];
+    if (incident.reporterId !== user.id && user.role !== 'authority') throw fail(403, 'Only the reporter or an authority can remove this incident');
+    db.incidents.splice(index, 1);
+    audit(user.id, 'incident_deleted', 'incident', incident.id);
+    await persist();
+    return send(res, 204, {});
+  }
   if (resource === 'incidents' && method === 'PATCH' && recordId && user.role === 'authority') {
     const row = db.incidents.find((x) => x.id === recordId); if (!row) throw fail(404, 'Incident not found');
     const body = await readBody(req);

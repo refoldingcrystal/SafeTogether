@@ -42,6 +42,8 @@ export default function MapScreen() {
   const [allIncidents, setAllIncidents] = useState(demonstrationIncidents);
   const [mapLocation, setMapLocation] = useState<Coordinate>(mock.me);
   const [submitting, setSubmitting] = useState(false);
+  const [activeIncidentId, setActiveIncidentId] = useState<string | null>(null);
+  const [markingSafe, setMarkingSafe] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
 
   useFocusEffect(useCallback(() => {
@@ -138,7 +140,8 @@ export default function MapScreen() {
           ? request as PersonalHelpCategory
           : 'Other personal assistance';
         const description = details.trim();
-        await api.createIncident({ category, description, approximateLocation, shareWithAuthorities: true });
+        const incident = await api.createIncident({ category, description, approximateLocation, shareWithAuthorities: true });
+        setActiveIncidentId(incident.id);
         submitted = true;
       }
       setHelpMenuOpen(false);
@@ -165,6 +168,24 @@ export default function MapScreen() {
 
   async function openHelpMenu() {
     setHelpMenuOpen(true);
+  }
+
+  async function markSafe() {
+    if (markingSafe) return;
+    setMarkingSafe(true);
+    try {
+      if (activeIncidentId) {
+        await api.deleteIncident(activeIncidentId);
+        setAllIncidents((current) => current.filter((incident) => incident.id !== activeIncidentId));
+        setSelectedId((current) => current === activeIncidentId ? null : current);
+      }
+      setActiveIncidentId(null);
+      app.setSos(false);
+    } catch (error) {
+      Alert.alert('Could not close help request', error instanceof Error ? error.message : 'Please try again when you have a connection.');
+    } finally {
+      setMarkingSafe(false);
+    }
   }
 
   return (
@@ -229,6 +250,8 @@ export default function MapScreen() {
           routeLoading={routeLoading}
           routeError={routeError}
           nearestSafe={nearestSafe}
+          markingSafe={markingSafe}
+          onMarkSafe={() => { void markSafe(); }}
           onPlanNearest={() => {
             if (!nearestSafe) return;
             setSafeRoute(null);
@@ -320,6 +343,8 @@ function BottomCard({
   routeLoading,
   routeError,
   nearestSafe,
+  markingSafe,
+  onMarkSafe,
   onPlanNearest,
   onPlanSite,
   onCloseRoute,
@@ -333,6 +358,8 @@ function BottomCard({
   routeLoading: boolean;
   routeError: string | null;
   nearestSafe: { site: EmergencySite; distanceKm: number } | null;
+  markingSafe: boolean;
+  onMarkSafe: () => void;
   onPlanNearest: () => void;
   onPlanSite: (site: EmergencySite) => void;
   onCloseRoute: () => void;
@@ -372,7 +399,7 @@ function BottomCard({
               <Text style={styles.muted}>This demonstration has not contacted responders or other people.</Text>
             </View>
           </View>
-          <Button icon="shield-checkmark" label="I am safe" color={colors.green} onPress={() => app.setSos(false)} />
+          <Button icon="shield-checkmark" label={markingSafe ? 'Closing request…' : 'I am safe'} color={colors.green} disabled={markingSafe} onPress={onMarkSafe} />
         </Card>
       </Animated.View>
     );

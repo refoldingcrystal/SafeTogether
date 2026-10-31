@@ -182,6 +182,7 @@ export const api = {
 
   getIncidents: () => request<ApiIncident[]>('/incidents'),
   createIncident: (input: { category: PersonalHelpCategory; description?: string; approximateLocation: ApproximateLocation | string; shareWithAuthorities?: boolean }) => request<{ id: string }>('/incidents', { method: 'POST', body: JSON.stringify(input) }),
+  deleteIncident: (incidentId: string) => request<void>(`/incidents/${encodeURIComponent(incidentId)}`, { method: 'DELETE' }),
   getNotices: () => request<OfficialNotice[]>('/notices'),
   getRendezvousPoints: () => request<MapSnapshot['rendezvousPoints']>('/rendezvous'),
   getEmergencySites: () => request<EmergencySite[]>('/emergency-sites'),

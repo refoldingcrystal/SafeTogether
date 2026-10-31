@@ -31,6 +31,7 @@ Create `mobile/.env.local` with `EXPO_PUBLIC_API_URL`. For Expo Go on a phone, u
 | `GET /help-requests`, `POST /help-requests`, `PATCH /help-requests/:id` | Signed in | Create, list, update, resolve, or withdraw emergency, event, or resource requests |
 | `GET /help-requests/:id/messages`, `POST /help-requests/:id/messages` | Signed in | Join and read a coordination thread; request owner and participants can read it |
 | `GET /incidents`, `POST /incidents` | Signed in | Public-safe incident list and report submission |
+| `DELETE /incidents/:id` | Reporter or authority | Permanently delete a report (idempotent for missing reports) |
 | `PATCH /incidents/:id` | Authority | Review status |
 | `GET /offers`, `POST /offers`, `PATCH /offers/:id` | Signed in | Create, list, edit, and withdraw aid offers |
 | `GET /notices` | Signed in | Published official notices |
