@@ -60,6 +60,7 @@ export default function MapScreen() {
       }));
       setAllIncidents(snapshot.incidents.map((item) => ({
         id: item.id,
+        reporterName: item.reporterName,
         category: item.category,
         description: item.description,
         approximateLocation: item.approximateLocation,
@@ -152,7 +153,7 @@ export default function MapScreen() {
         setDangerZones(withDemonstrationHazards(snapshot.dangerZones));
         const mapSites = withDemonstrationSites(toMapSites(snapshot));
         setSites(mapSites);
-        setAllIncidents(snapshot.incidents.map((item) => ({ id: item.id, category: item.category, description: item.description, approximateLocation: item.approximateLocation, submittedAt: item.submittedAt, updatedAt: item.updatedAt, source: item.source, verificationStatus: item.verificationStatus })));
+        setAllIncidents(snapshot.incidents.map((item) => ({ id: item.id, reporterName: item.reporterName, category: item.category, description: item.description, approximateLocation: item.approximateLocation, submittedAt: item.submittedAt, updatedAt: item.updatedAt, source: item.source, verificationStatus: item.verificationStatus })));
       } catch { /* The submission succeeded; keep the currently loaded map. */ }
       if (photoUploadFailed) Alert.alert('Report sent', 'Your report was received, but one or more photos could not be uploaded.');
     } catch (error) {
@@ -470,7 +471,7 @@ function BottomCard({
               <Ionicons name={categoryIcons[incident.category] ?? 'alert'} size={20} color="#fff" />
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={[styles.kicker, { color }]}>COMMUNITY REPORT · {incident.id}</Text>
+              <Text style={[styles.kicker, { color }]}>{incident.reporterName} reported</Text>
               <Text style={styles.title}>{incident.category}</Text>
             </View>
             <Pressable onPress={onClose} accessibilityRole="button" accessibilityLabel="Close" hitSlop={10}>

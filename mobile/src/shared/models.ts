@@ -25,6 +25,7 @@ export type ApproximateLocation = {
 
 export type Incident = {
   id: string;
+  reporterName: string;
   category: IncidentCategory;
   description: string;
   approximateLocation: ApproximateLocation;

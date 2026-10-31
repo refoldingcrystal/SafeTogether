@@ -173,7 +173,7 @@ function publicHelpRequest(request, viewerId) {
 }
 function publicIncident(incident) {
   const { attachments = [], exactLocation, reporterId, shareWithAuthorities, ...safe } = incident;
-  return { ...safe, attachments: incident.status === 'verified' ? attachments.filter((item) => item.approved).map(publicAttachment) : [] };
+  return { ...safe, reporterName: displayName(reporterId), attachments: incident.status === 'verified' ? attachments.filter((item) => item.approved).map(publicAttachment) : [] };
 }
 function isPersonalHelpIncident(incident) {
   return PERSONAL_HELP_CATEGORIES.includes(incident.category) || LEGACY_PERSONAL_HELP_CATEGORIES.includes(incident.category);

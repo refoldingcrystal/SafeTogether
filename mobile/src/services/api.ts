@@ -20,6 +20,7 @@ export type AuthSession = { token: string; user: ApiUser; created?: boolean };
 export type HelpKind = 'resource' | 'emergency' | 'Request resources' | 'Emergency';
 export type ApiIncident = {
   id: string;
+  reporterName: string;
   category: IncidentCategory;
   description: string;
   approximateLocation: ApproximateLocation;
