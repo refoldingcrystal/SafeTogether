@@ -38,12 +38,6 @@ const precisionRadius = { district: 450, neighborhood: 320, landmark: 200 } as c
 const tileUrl = process.env.EXPO_PUBLIC_MAP_TILE_URL?.trim() || '';
 const tileAttribution = process.env.EXPO_PUBLIC_MAP_TILE_ATTRIBUTION?.trim() || '';
 
-// Deterministic "people nearby" scattered around the user.
-const nearby = Array.from({ length: 16 }, (_, i) => ({
-  latitude: mock.me.latitude + Math.sin(i * 2.4) * 0.004 * (0.4 + (i % 4) / 4),
-  longitude: mock.me.longitude + Math.cos(i * 2.4) * 0.0065 * (0.4 + (i % 3) / 3),
-}));
-
 const START_BOUNDS = L.latLngBounds([ll(mock.evacuation.coordinate), ll(mock.family[2].coordinate)]);
 
 function incidentPoint(incident: Incident): [number, number] | null {
@@ -181,10 +175,6 @@ export function TacticalMap(props: TacticalMapProps) {
           <Marker key={person.id} position={ll(person.coordinate)} icon={icon(`<div class="m-person-nearby">${person.initials}<div class="m-label">${person.name} · ${person.distance}</div></div>`, [32, 32])} />
         ))}
 
-        {sos &&
-          nearby.map((p, i) => (
-            <Marker key={i} position={ll(p)} icon={icon('<div class="m-dot"></div>', [10, 10])} interactive={false} />
-          ))}
         {sos &&
           mock.authorities.map((a) => (
             <Marker key={a.id} position={ll(a.coordinate)} icon={icon(`<div class="m-auth" style="--c:${a.color}">${a.label}</div>`)} />

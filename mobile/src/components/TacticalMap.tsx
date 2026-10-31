@@ -37,11 +37,6 @@ export type TacticalMapProps = {
 
 const MAP_REGION = { latitude: 52.225, longitude: 20.995, latitudeDelta: 0.065, longitudeDelta: 0.11 };
 const precisionRadius = { district: 450, neighborhood: 320, landmark: 200 } as const;
-const nearbyOffsets = Array.from({ length: 16 }, (_, i) => ({
-  latitude: mock.me.latitude + Math.sin(i * 2.4) * 0.004 * (0.4 + (i % 4) / 4),
-  longitude: mock.me.longitude + Math.cos(i * 2.4) * 0.0065 * (0.4 + (i % 3) / 3),
-}));
-
 function incidentPoint(incident: Incident): Coordinate | null {
   const { latitude, longitude } = incident.approximateLocation;
   return latitude == null || longitude == null ? null : { latitude, longitude };
@@ -78,10 +73,6 @@ export function TacticalMap({
   const [selectedOfferId, setSelectedOfferId] = useState<string | null>(null);
   const [placeChoices, setPlaceChoices] = useState<MapPlaceItem[] | null>(null);
   const selected = useMemo(() => incidents.find((incident) => incident.id === selectedId), [incidents, selectedId]);
-  const nearby = useMemo(
-    () => nearbyOffsets.map((point) => ({ latitude: userLocation.latitude + point.latitude - mock.me.latitude, longitude: userLocation.longitude + point.longitude - mock.me.longitude })),
-    [userLocation.latitude, userLocation.longitude],
-  );
   const selectedOffer = helpOffers.find((offer) => offer.id === selectedOfferId);
   const placeGroups = useMemo(() => {
     const items: MapPlaceItem[] = [];
@@ -232,9 +223,6 @@ export function TacticalMap({
             <View style={styles.basementMarker}><Ionicons name="home" size={18} color="#fff" /></View>
           </Marker>
         )}
-        {sos && nearby.map((coordinate, index) => (
-          <Marker key={index} coordinate={coordinate} tracksViewChanges={false} tappable={false} zIndex={4}><View style={styles.nearbyDot} /></Marker>
-        ))}
         {sos && mock.authorities.map((authority) => (
           <Marker key={authority.id} coordinate={authority.coordinate} title={authority.label} zIndex={25}>
             <View style={[styles.authorityMarker, { backgroundColor: authority.color }]}><Text style={styles.authorityLabel}>{authority.label}</Text></View>
@@ -270,7 +258,6 @@ const styles = StyleSheet.create({
   alertMarker: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: colors.red, borderRadius: 7, paddingHorizontal: 8, paddingVertical: 5, ...shadow },
   alertMarkerText: { color: '#fff', fontSize: 10, fontWeight: '900', letterSpacing: 0.7 },
   basementMarker: { width: 36, height: 36, borderRadius: 18, borderWidth: 3, borderColor: '#fff', backgroundColor: colors.orange, alignItems: 'center', justifyContent: 'center', ...shadow },
-  nearbyDot: { width: 10, height: 10, borderRadius: 5, borderWidth: 2, borderColor: '#fff', backgroundColor: colors.textMuted },
   authorityMarker: { borderRadius: 7, borderWidth: 2, borderColor: '#fff', paddingHorizontal: 7, paddingVertical: 4, ...shadow },
   authorityLabel: { color: '#fff', fontSize: 10, fontWeight: '800' },
   myLocationMarker: { width: 62, height: 62, alignItems: 'center', justifyContent: 'center' },
