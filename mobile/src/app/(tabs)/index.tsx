@@ -1,20 +1,30 @@
 import { useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
+import Animated, { FadeInDown } from 'react-native-reanimated';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { TacticalMap } from '@/components/TacticalMap';
 import { Button, Card, Pill, SOSButton, StatusBadge } from '@/components/ui';
 import mock from '@/data/mock.json';
 import { categoryIcons, incidentColors, incidentGuide } from '@/icons';
-import { demonstrationIncidents, demonstrationNotice } from '@/shared/demo';
+import { demonstrationDangerZones, demonstrationIncidents, emergencySites, type DangerZone, type EmergencySite } from '@/shared/demo';
+import { requestSafeRoadRoute, type SafeRoute } from '@/shared/routing';
 import { useApp } from '@/state/app';
 import { colors, radius, shadow } from '@/theme';
 
 export default function MapScreen() {
   const app = useApp();
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedDangerId, setSelectedDangerId] = useState<string | null>(null);
+  const [selectedSiteId, setSelectedSiteId] = useState<string | null>(null);
   const [filter, setFilter] = useState<MapFilter>('all');
+  const [plannerOpen, setPlannerOpen] = useState(false);
+  const [routeFrom, setRouteFrom] = useState('me');
+  const [routeTo, setRouteTo] = useState(emergencySites[0].id);
+  const [customDestination, setCustomDestination] = useState<RouteOption | null>(null);
+  const [safeRoute, setSafeRoute] = useState<SafeRoute | null>(null);
+  const [routeLoading, setRouteLoading] = useState(false);
+  const [routeError, setRouteError] = useState<string | null>(null);
   const incidents = useMemo(
     () =>
       demonstrationIncidents.filter((incident) => {
@@ -24,6 +34,29 @@ export default function MapScreen() {
       }),
     [filter],
   );
+  const routeOptions = useMemo(() => [{ id: 'me', title: 'My location', coordinate: mock.me }, ...emergencySites, ...(customDestination ? [customDestination] : [])], [customDestination]);
+  const from = routeOptions.find((point) => point.id === routeFrom) ?? routeOptions[0];
+  const to = routeOptions.find((point) => point.id === routeTo) ?? emergencySites[0];
+
+  async function calculateRoute(start: RouteOption['coordinate'], destination: RouteOption['coordinate']) {
+    if (app.offline) {
+      setRouteError('Offline — reconnect to calculate a road route.');
+      return;
+    }
+    setRouteLoading(true);
+    setRouteError(null);
+    try {
+      setSafeRoute(await requestSafeRoadRoute(start, destination, demonstrationDangerZones));
+    } catch {
+      setRouteError('No verified safe road route is available. Choose another destination or try again shortly.');
+    } finally {
+      setRouteLoading(false);
+    }
+  }
+
+  async function planRoute() {
+    await calculateRoute(from.coordinate, to.coordinate);
+  }
 
   return (
     <View style={styles.root}>
@@ -33,9 +66,39 @@ export default function MapScreen() {
         route={app.route}
         showBasement={app.p2pReceived}
         offline={app.offline}
+        dangerZones={demonstrationDangerZones}
+        emergencySites={emergencySites}
+        plannedRoute={safeRoute?.coordinates}
+        destination={customDestination?.coordinate}
         incidents={incidents}
         selectedId={selectedId}
-        onSelect={setSelectedId}
+        onSelect={(id) => {
+          setSelectedId(id);
+          setSelectedDangerId(null);
+          setSelectedSiteId(null);
+        }}
+        onSelectDanger={(id) => {
+          setSelectedDangerId(id);
+          setSelectedId(null);
+          setSelectedSiteId(null);
+        }}
+        onSelectSite={(id) => {
+          setSelectedSiteId(id);
+          setSelectedId(null);
+          setSelectedDangerId(null);
+        }}
+        onDestinationLongPress={(coordinate) => {
+          const destination = { id: 'dropped-pin', title: 'Dropped pin', coordinate };
+          setCustomDestination(destination);
+          setRouteTo(destination.id);
+          setSafeRoute(null);
+          setRouteError(null);
+          setSelectedId(null);
+          setSelectedDangerId(null);
+          setSelectedSiteId(null);
+          setPlannerOpen(true);
+          void calculateRoute(mock.me, coordinate);
+        }}
       />
 
       <View style={styles.top} pointerEvents="box-none">
@@ -47,32 +110,6 @@ export default function MapScreen() {
             <Text style={styles.appName}>SafeTogether</Text>
             <Text style={styles.appSub}>Conflict zone · Warsaw</Text>
           </View>
-          {app.offline ? (
-            <Pill icon="bluetooth" label="Mesh" color={colors.mesh} bg={colors.meshSoft} />
-          ) : (
-            <Pill icon="globe-outline" label="Online" color={colors.green} bg={colors.greenSoft} />
-          )}
-        </View>
-
-        {app.sos ? (
-          <Pill icon="radio" label="Sharing your location with everyone nearby and responders" color={colors.red} bg={colors.redSoft} />
-        ) : (
-          <Pill icon="lock-closed" label="Location private · visible only to your family (3)" color={colors.blue} bg={colors.blueSoft} />
-        )}
-
-        <View style={[styles.connectivity, app.offline ? styles.connectivityOffline : styles.connectivityOnline]}>
-          <Ionicons name={app.offline ? 'cloud-offline-outline' : 'cloud-done-outline'} size={16} color={app.offline ? colors.orange : colors.green} />
-          <Text style={[styles.connectivityText, { color: app.offline ? colors.orange : colors.green }]}>
-            {app.offline ? 'Offline demo · showing saved incident data' : 'Online · OpenStreetMap tiles loading'}
-          </Text>
-        </View>
-
-        <View style={styles.officialNotice}>
-          <Ionicons name="megaphone" size={17} color={colors.blue} />
-          <View style={{ flex: 1 }}>
-            <Text style={styles.officialKicker}>OFFICIAL NOTICE · DEMONSTRATION</Text>
-            <Text style={styles.officialTitle}>{demonstrationNotice.title}</Text>
-          </View>
         </View>
 
         <View style={styles.filters} accessibilityRole="radiogroup" accessibilityLabel="Incident filters">
@@ -81,15 +118,6 @@ export default function MapScreen() {
           <FilterChip label="Needs review" active={filter === 'review'} onPress={() => selectFilter('review', setFilter, setSelectedId)} />
         </View>
 
-        {app.shelling && (
-          <Animated.View entering={FadeInUp} style={styles.alert}>
-            <Ionicons name="warning" size={22} color="#fff" />
-            <View style={{ flex: 1 }}>
-              <Text style={styles.alertTitle}>ALERT: SHELLING IN YOUR AREA</Text>
-              <Text style={styles.alertText}>Take shelter inside a building now. Avoid the red zone.</Text>
-            </View>
-          </Animated.View>
-        )}
       </View>
 
       <View style={styles.bottom} pointerEvents="box-none">
@@ -98,13 +126,40 @@ export default function MapScreen() {
             <SOSButton active={app.sos} onPress={() => app.setSos(true)} />
           </View>
         )}
-        <BottomCard selectedId={selectedId} onClose={() => setSelectedId(null)} />
+        <BottomCard
+          selectedId={selectedId}
+          selectedDanger={demonstrationDangerZones.find((zone) => zone.id === selectedDangerId)}
+          selectedSite={emergencySites.find((site) => site.id === selectedSiteId)}
+          plannerOpen={plannerOpen}
+          setPlannerOpen={setPlannerOpen}
+          routeOptions={routeOptions}
+          routeFrom={routeFrom}
+          routeTo={routeTo}
+          setRouteFrom={(id) => {
+            setRouteFrom(id);
+            setSafeRoute(null);
+          }}
+          setRouteTo={(id) => {
+            setRouteTo(id);
+            setSafeRoute(null);
+          }}
+          safeRoute={safeRoute}
+          routeLoading={routeLoading}
+          routeError={routeError}
+          onPlanRoute={planRoute}
+          onClose={() => {
+            setSelectedId(null);
+            setSelectedDangerId(null);
+            setSelectedSiteId(null);
+          }}
+        />
       </View>
     </View>
   );
 }
 
 type MapFilter = 'all' | 'verified' | 'review';
+type RouteOption = { id: string; title: string; coordinate: { latitude: number; longitude: number }; kind?: EmergencySite['kind'] };
 
 function selectFilter(filter: MapFilter, setFilter: (filter: MapFilter) => void, setSelectedId: (id: string | null) => void) {
   setFilter(filter);
@@ -119,9 +174,58 @@ function FilterChip({ label, active, onPress }: { label: string; active: boolean
   );
 }
 
-function BottomCard({ selectedId, onClose }: { selectedId: string | null; onClose: () => void }) {
+function BottomCard({
+  selectedId,
+  selectedDanger,
+  selectedSite,
+  plannerOpen,
+  setPlannerOpen,
+  routeOptions,
+  routeFrom,
+  routeTo,
+  setRouteFrom,
+  setRouteTo,
+  safeRoute,
+  routeLoading,
+  routeError,
+  onPlanRoute,
+  onClose,
+}: {
+  selectedId: string | null;
+  selectedDanger?: DangerZone;
+  selectedSite?: EmergencySite;
+  plannerOpen: boolean;
+  setPlannerOpen: (open: boolean) => void;
+  routeOptions: RouteOption[];
+  routeFrom: string;
+  routeTo: string;
+  setRouteFrom: (id: string) => void;
+  setRouteTo: (id: string) => void;
+  safeRoute: SafeRoute | null;
+  routeLoading: boolean;
+  routeError: string | null;
+  onPlanRoute: () => void;
+  onClose: () => void;
+}) {
   const app = useApp();
   const incident = demonstrationIncidents.find((i) => i.id === selectedId);
+
+  if (plannerOpen) {
+    return (
+      <RoutePlanner
+        routeOptions={routeOptions}
+        routeFrom={routeFrom}
+        routeTo={routeTo}
+        setRouteFrom={setRouteFrom}
+        setRouteTo={setRouteTo}
+        safeRoute={safeRoute}
+        routeLoading={routeLoading}
+        routeError={routeError}
+        onPlanRoute={onPlanRoute}
+        onClose={() => setPlannerOpen(false)}
+      />
+    );
+  }
 
   if (app.route === 'basement') {
     return (
@@ -159,6 +263,50 @@ function BottomCard({ selectedId, onClose }: { selectedId: string | null; onClos
             ))}
           </View>
           <Button icon="shield-checkmark" label="I am safe" color={colors.green} onPress={() => app.setSos(false)} />
+        </Card>
+      </Animated.View>
+    );
+  }
+
+  if (selectedDanger) {
+    const color = dangerColor(selectedDanger);
+    return (
+      <Animated.View entering={FadeInDown} key={selectedDanger.id}>
+        <Card style={{ borderLeftWidth: 5, borderLeftColor: color }}>
+          <View style={styles.row}>
+            <View style={[styles.incidentIcon, { backgroundColor: color }]}>
+              <Ionicons name={selectedDanger.kind === 'fire' ? 'flame' : selectedDanger.kind === 'flooding' ? 'water' : 'warning'} size={21} color="#fff" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.kicker, { color }]}>ACTIVE DANGER · {selectedDanger.severity.toUpperCase()}</Text>
+              <Text style={styles.title}>{selectedDanger.title}</Text>
+            </View>
+            <Pressable onPress={onClose} accessibilityRole="button" accessibilityLabel="Close" hitSlop={10}><Ionicons name="close" size={22} color={colors.textDim} /></Pressable>
+          </View>
+          <Text style={styles.body}>{selectedDanger.summary}</Text>
+          <Text style={styles.muted}>Danger radius: {Math.round(selectedDanger.radius)} m</Text>
+        </Card>
+      </Animated.View>
+    );
+  }
+
+  if (selectedSite) {
+    return (
+      <Animated.View entering={FadeInDown} key={selectedSite.id}>
+        <Card style={{ borderLeftWidth: 5, borderLeftColor: siteColor(selectedSite) }}>
+          <View style={styles.row}>
+            <View style={[styles.incidentIcon, { backgroundColor: siteColor(selectedSite) }]}>
+              <Ionicons name={selectedSite.kind === 'shelter' ? 'bed' : selectedSite.kind === 'aid' ? 'medkit' : 'shield-checkmark'} size={21} color="#fff" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.kicker, { color: siteColor(selectedSite) }]}>{selectedSite.kind.replace('_', ' ').toUpperCase()}</Text>
+              <Text style={styles.title}>{selectedSite.title}</Text>
+            </View>
+            <Pressable onPress={onClose} accessibilityRole="button" accessibilityLabel="Close" hitSlop={10}><Ionicons name="close" size={22} color={colors.textDim} /></Pressable>
+          </View>
+          <Text style={styles.body}>{selectedSite.summary}</Text>
+          {selectedSite.capacity && <Text style={styles.muted}>{selectedSite.capacity}</Text>}
+          <Button icon="navigate" label="Plan safe route here" color={colors.green} onPress={() => { setRouteTo(selectedSite.id); setPlannerOpen(true); }} />
         </Card>
       </Animated.View>
     );
@@ -220,9 +368,85 @@ function BottomCard({ selectedId, onClose }: { selectedId: string | null; onClos
             </View>
           ))}
         </View>
+        <Text style={styles.routeHint}>Or long-press anywhere on the map to set a custom destination.</Text>
+        <Button icon="navigate" label="Plan a safe road route" color={colors.green} onPress={() => setPlannerOpen(true)} />
       </Card>
     </Animated.View>
   );
+}
+
+function RoutePlanner({
+  routeOptions,
+  routeFrom,
+  routeTo,
+  setRouteFrom,
+  setRouteTo,
+  safeRoute,
+  routeLoading,
+  routeError,
+  onPlanRoute,
+  onClose,
+}: {
+  routeOptions: RouteOption[];
+  routeFrom: string;
+  routeTo: string;
+  setRouteFrom: (id: string) => void;
+  setRouteTo: (id: string) => void;
+  safeRoute: SafeRoute | null;
+  routeLoading: boolean;
+  routeError: string | null;
+  onPlanRoute: () => void;
+  onClose: () => void;
+}) {
+  return (
+    <Animated.View entering={FadeInDown} key="planner">
+      <Card style={{ borderWidth: 2, borderColor: colors.green }}>
+        <View style={styles.row}>
+          <View style={[styles.incidentIcon, { backgroundColor: colors.green }]}><Ionicons name="navigate" size={20} color="#fff" /></View>
+          <View style={{ flex: 1 }}>
+            <Text style={[styles.kicker, { color: colors.green }]}>SAFE ROAD ROUTE</Text>
+            <Text style={styles.title}>Find the shortest safe route</Text>
+          </View>
+          <Pressable onPress={onClose} accessibilityRole="button" accessibilityLabel="Close route planner" hitSlop={10}><Ionicons name="close" size={22} color={colors.textDim} /></Pressable>
+        </View>
+        <RoutePointPicker label="A · Start" selected={routeFrom} points={routeOptions} onSelect={setRouteFrom} />
+        <RoutePointPicker label="B · Destination" selected={routeTo} points={routeOptions.filter((point) => point.id !== 'me')} onSelect={setRouteTo} />
+        <Text style={styles.routeHint}>Long-press a map location to use it as a custom destination.</Text>
+        {safeRoute && (
+          <View style={styles.routeSummary}>
+            <Ionicons name="shield-checkmark" size={17} color={colors.green} />
+            <Text style={styles.routeSummaryText}>Shortest verified route · {safeRoute.distanceKm.toFixed(1)} km · {safeRoute.durationMinutes} min · avoids {safeRoute.avoidedZoneIds.length} zone{safeRoute.avoidedZoneIds.length === 1 ? '' : 's'}</Text>
+          </View>
+        )}
+        {routeError && <Text style={styles.routeError}>{routeError}</Text>}
+        <Text style={styles.routeDisclaimer}>Uses roads from OpenStreetMap. Check official instructions before travelling.</Text>
+        <Button icon={routeLoading ? 'hourglass' : 'navigate'} label={routeLoading ? 'Finding shortest safe route…' : 'Find shortest safe route'} color={colors.green} disabled={routeLoading} onPress={onPlanRoute} />
+      </Card>
+    </Animated.View>
+  );
+}
+
+function RoutePointPicker({ label, selected, points, onSelect }: { label: string; selected: string; points: RouteOption[]; onSelect: (id: string) => void }) {
+  return (
+    <View style={{ gap: 6 }}>
+      <Text style={styles.kicker}>{label}</Text>
+      <View style={styles.routeChoices}>
+        {points.map((point) => (
+          <Pressable key={point.id} onPress={() => onSelect(point.id)} style={[styles.routeChoice, point.id === selected && styles.routeChoiceActive]}>
+            <Text style={[styles.routeChoiceText, point.id === selected && styles.routeChoiceTextActive]}>{point.title}</Text>
+          </Pressable>
+        ))}
+      </View>
+    </View>
+  );
+}
+
+function dangerColor(zone: DangerZone) {
+  return zone.kind === 'flooding' ? colors.violet : zone.kind === 'fire' ? '#F04438' : colors.red;
+}
+
+function siteColor(site: EmergencySite) {
+  return site.kind === 'shelter' ? colors.green : site.kind === 'aid' ? colors.orange : colors.blue;
 }
 
 function Info({ icon, text }: { icon: keyof typeof Ionicons.glyphMap; text: string }) {
@@ -256,29 +480,21 @@ const styles = StyleSheet.create({
   },
   appName: { fontSize: 17, fontWeight: '900', color: colors.text },
   appSub: { fontSize: 12, color: colors.textMuted },
-  alert: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    backgroundColor: colors.red,
-    borderRadius: radius.md,
-    padding: 12,
-    ...shadow,
-  },
-  alertTitle: { color: '#fff', fontWeight: '900', fontSize: 13 },
-  alertText: { color: '#fff', fontSize: 12, marginTop: 2 },
-  connectivity: { flexDirection: 'row', alignItems: 'center', gap: 6, borderRadius: radius.pill, alignSelf: 'flex-start', paddingHorizontal: 10, paddingVertical: 6, ...shadow },
-  connectivityOnline: { backgroundColor: colors.card },
-  connectivityOffline: { backgroundColor: colors.orangeSoft },
-  connectivityText: { fontSize: 11, fontWeight: '800' },
-  officialNotice: { flexDirection: 'row', alignItems: 'center', gap: 9, backgroundColor: colors.card, borderLeftWidth: 4, borderLeftColor: colors.blue, borderRadius: radius.md, padding: 10, ...shadow },
-  officialKicker: { color: colors.blue, fontSize: 10, fontWeight: '900', letterSpacing: 0.7 },
-  officialTitle: { color: colors.text, fontSize: 12, fontWeight: '700', marginTop: 1 },
   filters: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
   filterChip: { backgroundColor: colors.card, borderColor: colors.border, borderWidth: 1, borderRadius: radius.pill, paddingHorizontal: 10, paddingVertical: 7, ...shadow },
   filterChipActive: { backgroundColor: colors.blue, borderColor: colors.blue },
   filterText: { color: colors.textMuted, fontSize: 11, fontWeight: '800' },
   filterTextActive: { color: '#fff' },
+  routeChoices: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
+  routeChoice: { backgroundColor: colors.bg, borderColor: colors.border, borderWidth: 1, borderRadius: radius.sm, paddingHorizontal: 9, paddingVertical: 7 },
+  routeChoiceActive: { backgroundColor: colors.green, borderColor: colors.green },
+  routeChoiceText: { color: colors.textMuted, fontSize: 11, fontWeight: '700' },
+  routeChoiceTextActive: { color: '#fff' },
+  routeSummary: { flexDirection: 'row', alignItems: 'center', gap: 7, backgroundColor: colors.greenSoft, borderRadius: radius.sm, padding: 9 },
+  routeSummaryText: { flex: 1, color: colors.green, fontSize: 12, fontWeight: '800' },
+  routeError: { color: colors.red, fontSize: 12, fontWeight: '700' },
+  routeDisclaimer: { color: colors.textMuted, fontSize: 11, lineHeight: 15 },
+  routeHint: { color: colors.textMuted, fontSize: 11, lineHeight: 15 },
   bottom: { position: 'absolute', left: 0, right: 0, bottom: 0, padding: 12 },
   sosRow: { alignItems: 'flex-end', marginBottom: 4 },
   kicker: { fontSize: 11, fontWeight: '800', letterSpacing: 0.8, color: colors.textDim },

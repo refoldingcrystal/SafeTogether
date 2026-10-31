@@ -5,6 +5,7 @@ import MapView, { Circle, Marker, Polyline, UrlTile } from 'react-native-maps';
 import mock from '@/data/mock.json';
 import { categoryIcons, incidentColors } from '@/icons';
 import type { Incident } from '@/shared/models';
+import type { Coordinate, DangerZone, EmergencySite } from '@/shared/demo';
 import type { Route } from '@/state/app';
 import { colors, shadow } from '@/theme';
 
@@ -14,12 +15,17 @@ export type TacticalMapProps = {
   route: Route;
   showBasement: boolean;
   offline?: boolean;
+  dangerZones?: DangerZone[];
+  emergencySites?: EmergencySite[];
+  plannedRoute?: Coordinate[];
+  destination?: Coordinate;
   incidents: Incident[];
   selectedId: string | null;
   onSelect: (id: string) => void;
+  onSelectDanger?: (id: string) => void;
+  onSelectSite?: (id: string) => void;
+  onDestinationLongPress?: (coordinate: Coordinate) => void;
 };
-
-type Coordinate = { latitude: number; longitude: number };
 
 const MAP_REGION = { latitude: 52.225, longitude: 20.995, latitudeDelta: 0.065, longitudeDelta: 0.11 };
 const precisionRadius = { district: 450, neighborhood: 320, landmark: 200 } as const;
@@ -38,7 +44,23 @@ function regionAround(point: Coordinate, delta = 0.018) {
 }
 
 /** Native OpenStreetMap implementation; the web build resolves TacticalMap.web.tsx. */
-export function TacticalMap({ shelling, sos, route, showBasement, offline = false, incidents, selectedId, onSelect }: TacticalMapProps) {
+export function TacticalMap({
+  shelling,
+  sos,
+  route,
+  showBasement,
+  offline = false,
+  dangerZones = [],
+  emergencySites = [],
+  plannedRoute,
+  destination,
+  incidents,
+  selectedId,
+  onSelect,
+  onSelectDanger,
+  onSelectSite,
+  onDestinationLongPress,
+}: TacticalMapProps) {
   const map = useRef<MapView>(null);
   const selected = useMemo(() => incidents.find((incident) => incident.id === selectedId), [incidents, selectedId]);
 
@@ -66,6 +88,7 @@ export function TacticalMap({ shelling, sos, route, showBasement, offline = fals
         pitchEnabled={false}
         showsCompass={false}
         toolbarEnabled={false}
+        onLongPress={(event) => onDestinationLongPress?.(event.nativeEvent.coordinate)}
       >
         <UrlTile
           urlTemplate="https://tile.openstreetmap.org/{z}/{x}/{y}.png"
@@ -92,7 +115,24 @@ export function TacticalMap({ shelling, sos, route, showBasement, offline = fals
           );
         })}
 
-        {shelling && (
+        {dangerZones.map((zone) => {
+          const color = dangerColors[zone.kind];
+          const icon = dangerIcons[zone.kind];
+          return (
+            <Fragment key={zone.id}>
+              {[1, 0.7, 0.42].map((factor) => (
+                <Circle key={factor} center={zone.coordinate} radius={zone.radius * factor} strokeColor={factor === 1 ? color : 'transparent'} strokeWidth={factor === 1 ? 2 : 0} fillColor={heatColor(color, factor)} zIndex={2} />
+              ))}
+              <Marker coordinate={zone.coordinate} title={zone.title} description={zone.summary} onPress={() => onSelectDanger?.(zone.id)} zIndex={45}>
+                <View style={[styles.dangerMarker, { backgroundColor: color }]}>
+                  <Ionicons name={icon} size={17} color="#fff" />
+                </View>
+              </Marker>
+            </Fragment>
+          );
+        })}
+
+        {shelling && !dangerZones.some((zone) => zone.kind === 'attack') && (
           <>
             {[1, 0.72, 0.44].map((factor) => (
               <Circle key={factor} center={mock.shelling.epicenter} radius={mock.shelling.radius * factor} strokeColor={factor === 1 ? colors.red : 'transparent'} strokeWidth={2} fillColor="rgba(217, 45, 32, 0.12)" zIndex={2} />
@@ -106,13 +146,21 @@ export function TacticalMap({ shelling, sos, route, showBasement, offline = fals
           </>
         )}
 
-        {route === null && <Polyline coordinates={[mock.me, mock.evacuation.coordinate]} strokeColor={colors.green} strokeWidth={2} lineDashPattern={[5, 7]} zIndex={3} />}
-        {route === 'evacuation' && <RouteLine points={[mock.me, mock.evacuation.coordinate]} />}
-        {route === 'basement' && <RouteLine points={mock.basementRoute} />}
+        {plannedRoute && plannedRoute.length > 1 ? <RouteLine points={plannedRoute} /> : route === 'evacuation' ? <RouteLine points={[mock.me, mock.evacuation.coordinate]} /> : route === 'basement' ? <RouteLine points={mock.basementRoute} /> : null}
 
-        <Marker coordinate={mock.evacuation.coordinate} title={mock.evacuation.name} description={`${mock.evacuation.capacity} · ${mock.evacuation.authority}`} zIndex={20}>
-          <View style={styles.evacuationMarker}><Ionicons name="medical" size={20} color="#fff" /></View>
-        </Marker>
+        {emergencySites.map((site) => (
+          <Marker key={site.id} coordinate={site.coordinate} title={site.title} description={site.summary} onPress={() => onSelectSite?.(site.id)} zIndex={30}>
+            <View style={[styles.emergencySiteMarker, { backgroundColor: siteColors[site.kind] }]}>
+              <Ionicons name={siteIcons[site.kind]} size={18} color="#fff" />
+            </View>
+          </Marker>
+        ))}
+        {destination && (
+          <Marker coordinate={destination} title="Selected destination" description="Long-press a different place to change the destination." zIndex={80}>
+            <View style={styles.destinationMarker}><Ionicons name="flag" size={18} color="#fff" /></View>
+          </Marker>
+        )}
+
         {mock.family.map((person) => (
           <Marker key={person.id} coordinate={person.coordinate} title={`${person.name} · ${person.status}`} zIndex={15}>
             <View style={[styles.familyMarker, { backgroundColor: person.color }]}><Text style={styles.familyInitials}>{person.initials}</Text></View>
@@ -150,7 +198,6 @@ const styles = StyleSheet.create({
   incidentMarkerSelected: { transform: [{ scale: 1.2 }], borderColor: '#101828' },
   alertMarker: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: colors.red, borderRadius: 7, paddingHorizontal: 8, paddingVertical: 5, ...shadow },
   alertMarkerText: { color: '#fff', fontSize: 10, fontWeight: '900', letterSpacing: 0.7 },
-  evacuationMarker: { width: 38, height: 38, borderRadius: 11, borderWidth: 3, borderColor: '#fff', backgroundColor: colors.green, alignItems: 'center', justifyContent: 'center', ...shadow },
   familyMarker: { width: 34, height: 34, borderRadius: 17, borderWidth: 3, borderColor: '#fff', alignItems: 'center', justifyContent: 'center', ...shadow },
   familyInitials: { color: '#fff', fontWeight: '900', fontSize: 14 },
   basementMarker: { width: 36, height: 36, borderRadius: 18, borderWidth: 3, borderColor: '#fff', backgroundColor: colors.orange, alignItems: 'center', justifyContent: 'center', ...shadow },
@@ -161,4 +208,17 @@ const styles = StyleSheet.create({
   meMarkerSos: { backgroundColor: colors.red, transform: [{ scale: 1.15 }] },
   attribution: { position: 'absolute', right: 5, bottom: 5, backgroundColor: 'rgba(255,255,255,0.86)', borderRadius: 3, paddingHorizontal: 4, paddingVertical: 2 },
   attributionText: { fontSize: 8, color: colors.textMuted },
+  dangerMarker: { width: 38, height: 38, borderRadius: 19, borderWidth: 3, borderColor: '#fff', alignItems: 'center', justifyContent: 'center', ...shadow },
+  emergencySiteMarker: { width: 38, height: 38, borderRadius: 11, borderWidth: 3, borderColor: '#fff', alignItems: 'center', justifyContent: 'center', ...shadow },
+  destinationMarker: { width: 38, height: 38, borderRadius: 19, borderWidth: 3, borderColor: '#fff', backgroundColor: colors.text, alignItems: 'center', justifyContent: 'center', ...shadow },
 });
+
+const dangerColors = { attack: colors.red, fire: '#F04438', flooding: colors.violet } as const;
+const dangerIcons = { attack: 'warning', fire: 'flame', flooding: 'water' } as const;
+const siteColors = { shelter: colors.green, safe_zone: colors.blue, aid: colors.orange } as const;
+const siteIcons = { shelter: 'bed', safe_zone: 'shield-checkmark', aid: 'medkit' } as const;
+
+function heatColor(color: string, factor: number) {
+  const alpha = factor === 1 ? 0.12 : factor === 0.7 ? 0.14 : 0.2;
+  return `${color}${Math.round(alpha * 255).toString(16).padStart(2, '0')}`;
+}

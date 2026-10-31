@@ -8,6 +8,7 @@ import mock from '@/data/mock.json';
 import { incidentColors } from '@/icons';
 import { colors } from '@/theme';
 import type { Incident } from '@/shared/models';
+import type { DangerZone, EmergencySite } from '@/shared/demo';
 import type { TacticalMapProps } from './TacticalMap';
 
 type LatLng = { latitude: number; longitude: number };
@@ -33,11 +34,6 @@ const nearby = Array.from({ length: 16 }, (_, i) => ({
   longitude: mock.me.longitude + Math.cos(i * 2.4) * 0.0065 * (0.4 + (i % 3) / 3),
 }));
 
-const evacMid = {
-  latitude: (mock.me.latitude + mock.evacuation.coordinate.latitude) / 2,
-  longitude: (mock.me.longitude + mock.evacuation.coordinate.longitude) / 2,
-};
-
 const START_BOUNDS = L.latLngBounds([ll(mock.evacuation.coordinate), ll(mock.family[2].coordinate)]);
 
 function incidentPoint(incident: Incident): [number, number] | null {
@@ -61,7 +57,7 @@ function Camera({ shelling, sos, route, incidents, selectedId }: TacticalMapProp
 }
 
 export function TacticalMap(props: TacticalMapProps) {
-  const { shelling, sos, route, showBasement, incidents, selectedId, onSelect } = props;
+  const { shelling, sos, route, showBasement, incidents, selectedId, onSelect, dangerZones = [], emergencySites = [], plannedRoute, onSelectDanger, onSelectSite } = props;
 
   return (
     <View style={styles.root}>
@@ -96,6 +92,18 @@ export function TacticalMap(props: TacticalMapProps) {
           );
         })}
 
+        {dangerZones.map((zone) => {
+          const color = dangerColor(zone);
+          return (
+            <span key={zone.id}>
+              {[1, 0.7, 0.42].map((factor) => (
+                <Circle key={factor} center={ll(zone.coordinate)} radius={zone.radius * factor} pathOptions={{ color: factor === 1 ? color : 'transparent', weight: factor === 1 ? 2 : 0, fillColor: color, fillOpacity: factor === 1 ? 0.1 : factor === 0.7 ? 0.13 : 0.2 }} />
+              ))}
+              <Marker position={ll(zone.coordinate)} icon={icon(`<div class="m-danger" style="--c:${color}">${dangerSymbol(zone)}</div>`, [38, 38])} eventHandlers={{ click: () => onSelectDanger?.(zone.id) }} />
+            </span>
+          );
+        })}
+
         {shelling && (
           <>
             {[1, 0.78, 0.58, 0.4, 0.24].map((t) => (
@@ -115,23 +123,11 @@ export function TacticalMap(props: TacticalMapProps) {
           </>
         )}
 
-        {route === null && (
-          <>
-            <Polyline
-              positions={[ll(mock.me), ll(mock.evacuation.coordinate)]}
-              pathOptions={{ color: colors.green, weight: 2, dashArray: '4 6', opacity: 0.8 }}
-            />
-            <Marker position={ll(evacMid)} icon={icon('<div class="m-distance">5.0 km</div>')} interactive={false} />
-          </>
-        )}
+        {plannedRoute && plannedRoute.length > 1 ? <RouteLine points={plannedRoute} /> : route === 'evacuation' ? <RouteLine points={[mock.me, mock.evacuation.coordinate]} /> : route === 'basement' ? <RouteLine points={mock.basementRoute} /> : null}
 
-        {route === 'evacuation' && <RouteLine points={[mock.me, mock.evacuation.coordinate]} />}
-        {route === 'basement' && <RouteLine points={mock.basementRoute} />}
-
-        <Marker
-          position={ll(mock.evacuation.coordinate)}
-          icon={icon('<div class="m-evac">+<div class="m-label">Evacuation point</div></div>', [38, 38])}
-        />
+        {emergencySites.map((site) => (
+          <Marker key={site.id} position={ll(site.coordinate)} icon={icon(`<div class="m-site" style="--c:${siteColor(site)}">${siteSymbol(site)}<div class="m-label">${site.title}</div></div>`, [38, 38])} eventHandlers={{ click: () => onSelectSite?.(site.id) }} />
+        ))}
 
         {mock.family.map((f) => (
           <Marker
@@ -171,6 +167,22 @@ export function TacticalMap(props: TacticalMapProps) {
       </MapContainer>
     </View>
   );
+}
+
+function dangerColor(zone: DangerZone) {
+  return zone.kind === 'flooding' ? colors.violet : zone.kind === 'fire' ? '#F04438' : colors.red;
+}
+
+function dangerSymbol(zone: DangerZone) {
+  return zone.kind === 'fire' ? '♨' : zone.kind === 'flooding' ? '≈' : '⚠';
+}
+
+function siteColor(site: EmergencySite) {
+  return site.kind === 'shelter' ? colors.green : site.kind === 'aid' ? colors.orange : colors.blue;
+}
+
+function siteSymbol(site: EmergencySite) {
+  return site.kind === 'shelter' ? '⌂' : site.kind === 'aid' ? '+' : '✓';
 }
 
 function RouteLine({ points }: { points: LatLng[] }) {

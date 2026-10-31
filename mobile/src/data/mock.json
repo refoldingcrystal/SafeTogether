@@ -1,5 +1,5 @@
 {
-  "me": { "latitude": 52.2297, "longitude": 21.0122 },
+  "me": { "latitude": 52.2239, "longitude": 20.997 },
 
   "family": [
     { "id": "mom", "name": "Mom", "initials": "M", "color": "#7A5AF8", "status": "Safe", "coordinate": { "latitude": 52.2445, "longitude": 20.9905 } },
@@ -36,7 +36,7 @@
   },
 
   "basementRoute": [
-    { "latitude": 52.2297, "longitude": 21.0122 },
+    { "latitude": 52.2239, "longitude": 20.997 },
     { "latitude": 52.2299, "longitude": 21.0092 },
     { "latitude": 52.2281, "longitude": 21.0085 },
     { "latitude": 52.2272, "longitude": 21.0069 },
