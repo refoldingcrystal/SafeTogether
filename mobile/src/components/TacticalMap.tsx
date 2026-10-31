@@ -5,7 +5,6 @@ import { MapPlaceChooser } from '@/components/MapPlaceChooser';
 import MapView, { Circle, Marker, Polyline, UrlTile } from 'react-native-maps';
 import { Paths } from 'expo-file-system';
 import mock from '@/data/mock.json';
-import { categoryIcons, incidentColors } from '@/icons';
 import type { Incident } from '@/shared/models';
 import type { Coordinate, DangerZone, EmergencySite, MapHelpOffer, MapHelpRequest, NearbyPerson } from '@/shared/demo';
 import type { Route } from '@/state/app';
@@ -170,17 +169,18 @@ export function TacticalMap({
         {showCommunityReports && incidents.map((incident) => {
           const coordinate = incidentPoint(incident);
           if (!coordinate) return null;
-          const color = incidentColors[incident.category] ?? colors.blue;
+          const color = colors.red;
           const isSelected = incident.id === selectedId;
           const pulseId = `incident:${incident.id}`;
           const isPulsing = pulsingIds.has(pulseId);
           return (
             <Fragment key={incident.id}>
               <Circle center={coordinate} radius={precisionRadius[incident.approximateLocation.precision]} strokeColor={color} strokeWidth={isSelected ? 2.5 : 1.25} fillColor={`${color}20`} zIndex={1} />
-              {!groupedKeys.has(`incident:${incident.id}`) && <Marker coordinate={coordinate} onPress={() => onSelect(incident.id)} zIndex={isSelected ? 50 : 10} tracksViewChanges={isPulsing}>
+              {!groupedKeys.has(`incident:${incident.id}`) && <Marker coordinate={coordinate} onPress={() => onSelect(incident.id)} zIndex={isSelected ? 5001 : 5000} tracksViewChanges={isPulsing}>
                 <MapPulse active={isPulsing}>
-                  <View style={[styles.incidentMarker, { backgroundColor: color }, isSelected && styles.incidentMarkerSelected]}>
-                    <Ionicons name={categoryIcons[incident.category] ?? 'alert'} size={16} color="#fff" />
+                  <View style={[styles.offerMarker, styles.incidentHelpMarker, isSelected && styles.helpMarkerSelected]}>
+                    <Ionicons name="alert-circle" size={15} color="#fff" />
+                    <Text style={styles.offerMarkerLabel}>HELP</Text>
                   </View>
                 </MapPulse>
               </Marker>}
@@ -260,7 +260,7 @@ export function TacticalMap({
           <Marker key={request.id} coordinate={request.coordinate} zIndex={36} tracksViewChanges={pulsingIds.has(`request:${request.id}`)} onPress={() => onSelectHelpRequest?.(request.id)}>
             <MapPulse active={pulsingIds.has(`request:${request.id}`)}>
               <View style={[styles.offerMarker, styles.requestMarker]}>
-                <Ionicons name="alert-circle" size={16} color="#fff" />
+                <Ionicons name="hand-left" size={15} color="#fff" />
                 <Text style={styles.offerMarkerLabel}>NEED</Text>
               </View>
             </MapPulse>
@@ -309,8 +309,6 @@ function RouteLine({ points }: { points: Coordinate[] }) {
 
 const styles = StyleSheet.create({
   root: { ...StyleSheet.absoluteFill, backgroundColor: '#EEF1F4' },
-  incidentMarker: { width: 34, height: 34, borderRadius: 17, borderWidth: 3, borderColor: '#fff', alignItems: 'center', justifyContent: 'center', ...shadow },
-  incidentMarkerSelected: { transform: [{ scale: 1.2 }], borderColor: '#101828' },
   alertMarker: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: colors.red, borderRadius: 7, paddingHorizontal: 8, paddingVertical: 5, ...shadow },
   alertMarkerText: { color: '#fff', fontSize: 10, fontWeight: '900', letterSpacing: 0.7 },
   basementMarker: { width: 36, height: 36, borderRadius: 18, borderWidth: 3, borderColor: '#fff', backgroundColor: colors.orange, alignItems: 'center', justifyContent: 'center', ...shadow },
@@ -333,7 +331,9 @@ const styles = StyleSheet.create({
   nearbyPersonLabel: { color: '#fff', fontSize: 10, fontWeight: '800' },
   offerMarker: { minWidth: 64, height: 34, borderRadius: 17, borderWidth: 3, borderColor: '#fff', backgroundColor: colors.green, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, paddingHorizontal: 7, ...shadow },
   offerMarkerLabel: { color: '#fff', fontSize: 9, fontWeight: '900', letterSpacing: 0.3 },
-  requestMarker: { backgroundColor: colors.red },
+  incidentHelpMarker: { backgroundColor: colors.red },
+  helpMarkerSelected: { transform: [{ scale: 1.2 }], borderColor: '#101828' },
+  requestMarker: { backgroundColor: colors.blue },
   placeGroupMarker: { width: 42, height: 42, borderRadius: 21, borderWidth: 3, borderColor: '#fff', backgroundColor: colors.text, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 2, ...shadow },
   placeGroupCount: { color: '#fff', fontSize: 12, fontWeight: '900' },
   destinationMarker: { width: 38, height: 38, borderRadius: 19, borderWidth: 3, borderColor: '#fff', backgroundColor: colors.text, alignItems: 'center', justifyContent: 'center', ...shadow },

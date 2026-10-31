@@ -2,7 +2,7 @@ import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import { colors, radius, shadow } from '@/theme';
 import type { MapPlaceItem } from '@/shared/mapPlaces';
 
-const kindLabel = { incident: 'REPORT', danger: 'DANGER', site: 'SAFE POINT', offer: 'OFFER', request: 'HELP NEEDED' } as const;
+const kindLabel = { incident: 'HELP', danger: 'DANGER', site: 'SAFE POINT', offer: 'OFFER', request: 'NEED' } as const;
 
 export function MapPlaceChooser({ visible, items, onChoose, onClose }: {
   visible: boolean;
@@ -26,7 +26,7 @@ export function MapPlaceChooser({ visible, items, onChoose, onClose }: {
           </View>
           {items.map((item) => (
             <Pressable key={item.key} onPress={() => onChoose(item)} style={styles.choice} accessibilityRole="button">
-              <Text style={styles.kind}>{kindLabel[item.kind]}</Text>
+              <Text style={[styles.kind, item.kind === 'incident' && styles.kindHelp, item.kind === 'request' && styles.kindNeed]}>{kindLabel[item.kind]}</Text>
               <Text style={styles.choiceTitle} numberOfLines={2}>{item.title}</Text>
             </Pressable>
           ))}
@@ -46,5 +46,7 @@ const styles = StyleSheet.create({
   close: { color: colors.textMuted, fontSize: 23, lineHeight: 24, paddingHorizontal: 3 },
   choice: { flexDirection: 'row', alignItems: 'center', gap: 9, borderWidth: 1, borderColor: colors.border, borderRadius: radius.sm, paddingHorizontal: 10, paddingVertical: 9 },
   kind: { minWidth: 60, color: colors.blue, fontSize: 9, fontWeight: '900', letterSpacing: 0.4 },
+  kindHelp: { color: colors.red },
+  kindNeed: { color: colors.blue },
   choiceTitle: { flex: 1, color: colors.text, fontSize: 13, fontWeight: '700' },
 });
