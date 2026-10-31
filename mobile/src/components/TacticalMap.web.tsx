@@ -6,7 +6,6 @@ import L from 'leaflet';
 import { Circle, MapContainer, Marker, Polyline, TileLayer, useMap } from 'react-leaflet';
 import { MapPlaceChooser } from '@/components/MapPlaceChooser';
 import mock from '@/data/mock.json';
-import { incidentColors } from '@/icons';
 import { colors } from '@/theme';
 import type { Incident } from '@/shared/models';
 import type { DangerZone, EmergencySite } from '@/shared/demo';
@@ -21,17 +20,6 @@ const icon = (html: string, size: [number, number] = [0, 0]) =>
 
 const HOUSE_SVG = '<svg viewBox="0 0 24 24"><path d="M12 3l10 8h-3v10h-5v-6h-4v6H5V11H2z"/></svg>';
 
-const GLYPHS: Record<string, string> = {
-  Injured: '<path d="M10 2h4v8h8v4h-8v8h-4v-8H2v-4h8z"/>',
-  Stranded: '<path d="M5 11l2-5h10l2 5h1v7h-2v2h-3v-2H9v2H6v-2H4v-7zm2.5-1h9l-1-3h-7z"/>',
-  Lost: '<circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5L21 21"/>',
-  'Other personal assistance': '<path d="M11 4h2v10h-2zM11 17h2v2h-2z"/>',
-  Fire: '<path d="M12 2s5 4.5 5 10a5 5 0 01-10 0c0-2 1-3.5 1-3.5S9 11 11 11c0-4 1-9 1-9z"/>',
-  Flooding: '<path d="M12 3c-4 5-6 8-6 11a6 6 0 0012 0c0-3-2-6-6-11z"/>',
-  'Road blockage': '<path d="M5 11l2-5h10l2 5h1v7h-2v2h-3v-2H9v2H6v-2H4v-7zm2.5-1h9l-1-3h-7z"/>',
-  'Infrastructure damage': '<path d="M13 2L4 14h6l-1 8 9-12h-6z"/>',
-};
-const DEFAULT_GLYPH = '<path d="M11 4h2v10h-2zM11 17h2v2h-2z"/>';
 const precisionRadius = { district: 450, neighborhood: 320, landmark: 200 } as const;
 const tileUrl = process.env.EXPO_PUBLIC_MAP_TILE_URL?.trim() || '';
 const tileAttribution = process.env.EXPO_PUBLIC_MAP_TILE_ATTRIBUTION?.trim() || '';
@@ -104,8 +92,8 @@ export function TacticalMap(props: TacticalMapProps) {
         {showCommunityReports && incidents.map((incident) => {
           const pos = incidentPoint(incident);
           if (!pos) return null;
-          const color = incidentColors[incident.category] ?? colors.blue;
-          const cls = ['m-pin', incident.verificationStatus === 'unverified' ? 'unverified' : '', incident.id === selectedId ? 'selected' : '', pulsingIds.has(`incident:${incident.id}`) ? 'm-pulse' : ''].join(' ');
+          const color = colors.red;
+          const cls = ['m-help-map-marker', 'm-help-map-marker-incident', incident.id === selectedId ? 'selected' : '', pulsingIds.has(`incident:${incident.id}`) ? 'm-pulse' : ''].join(' ');
           return (
             <span key={incident.id}>
               <Circle
@@ -116,7 +104,8 @@ export function TacticalMap(props: TacticalMapProps) {
               />
               {!groupedKeys.has(`incident:${incident.id}`) && <Marker
                 position={pos}
-                icon={icon(`<div class="${cls}" style="--c:${color}"><svg viewBox="0 0 24 24">${GLYPHS[incident.category] ?? DEFAULT_GLYPH}</svg></div>`, [34, 34])}
+                zIndexOffset={5000}
+                icon={icon(`<div class="${cls}"><svg class="m-help-map-marker-icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="2.4"/><path d="M12 7v6m0 4h.01" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg>HELP</div>`, [64, 34])}
                 eventHandlers={{ click: () => onSelect(incident.id) }}
               />}
             </span>
@@ -166,7 +155,7 @@ export function TacticalMap(props: TacticalMapProps) {
         ))}
         {(props.helpRequests ?? []).map((request) => (
           groupedKeys.has(`request:${request.id}`) ? null :
-          <Marker key={request.id} position={ll(request.coordinate)} icon={icon(`<div class="m-help-request${pulsingIds.has(`request:${request.id}`) ? ' m-pulse' : ''}"><svg viewBox="0 0 24 24"><path d="M12 3 2.7 20h18.6L12 3Z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M12 8v5.5m0 2.8v.1" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg><div class="m-label">HELP NEEDED</div></div>`, [38, 38])} eventHandlers={{ click: () => props.onSelectHelpRequest?.(request.id) }} />
+          <Marker key={request.id} position={ll(request.coordinate)} icon={icon(`<div class="m-help-map-marker m-help-map-marker-request${pulsingIds.has(`request:${request.id}`) ? ' m-pulse' : ''}"><svg class="m-help-map-marker-icon" viewBox="0 0 24 24"><path d="M7 12V6a1.5 1.5 0 0 1 3 0v5V4a1.5 1.5 0 0 1 3 0v7V5a1.5 1.5 0 0 1 3 0v7l1-1a1.5 1.5 0 0 1 2.1 2.1l-3.2 3.2A5.5 5.5 0 0 1 13 18h-1.5a4 4 0 0 1-2.8-1.2L5 13.1a1.5 1.5 0 0 1 2.1-2.1L9 12" fill="currentColor"/></svg>NEED</div>`, [64, 34])} eventHandlers={{ click: () => props.onSelectHelpRequest?.(request.id) }} />
         ))}
         {placeGroups.map((group) => (
           <Marker key={group.key} position={ll(group.coordinate)} zIndexOffset={2000} icon={icon(`<div class="m-cluster${group.items.some((item) => pulsingIds.has(item.key)) ? ' m-pulse' : ''}">${group.items.length}</div>`, [42, 42])} eventHandlers={{ click: () => setPlaceChoices(group.items) }} />
