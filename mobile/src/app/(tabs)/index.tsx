@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Alert, Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { router, useFocusEffect } from 'expo-router';
@@ -9,7 +9,7 @@ import { TacticalMap } from '@/components/TacticalMap';
 import { Button, Card, NeedHelpButton, StatusBadge } from '@/components/ui';
 import mock from '@/data/mock.json';
 import { categoryIcons, incidentColors, incidentGuide } from '@/icons';
-import { demonstrationDangerZones, demonstrationIncidents, emergencySites, type DangerZone, type EmergencySite } from '@/shared/demo';
+import { demonstrationDangerZones, demonstrationIncidents, emergencySites, nearbyPeople, type Coordinate, type DangerZone, type EmergencySite } from '@/shared/demo';
 import { api, type MapSnapshot } from '@/services/api';
 import { requestSafeRoadRoute, type SafeRoute } from '@/shared/routing';
 import { useApp } from '@/state/app';
@@ -27,10 +27,7 @@ export default function MapScreen() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [selectedDangerId, setSelectedDangerId] = useState<string | null>(null);
   const [selectedSiteId, setSelectedSiteId] = useState<string | null>(null);
-  const [plannerOpen, setPlannerOpen] = useState(false);
-  const [routeFrom, setRouteFrom] = useState('me');
-  const [routeTo, setRouteTo] = useState(emergencySites[0].id);
-  const [customDestination, setCustomDestination] = useState<RouteOption | null>(null);
+  const [customDestination, setCustomDestination] = useState<Coordinate | null>(null);
   const [safeRoute, setSafeRoute] = useState<SafeRoute | null>(null);
   const [routeLoading, setRouteLoading] = useState(false);
   const [routeError, setRouteError] = useState<string | null>(null);
@@ -44,6 +41,7 @@ export default function MapScreen() {
   const [sites, setSites] = useState(emergencySites);
   const [allIncidents, setAllIncidents] = useState(demonstrationIncidents);
   const [gps, setGps] = useState<{ latitude: number; longitude: number } | null>(null);
+  const [mapLocation, setMapLocation] = useState<Coordinate>(mock.me);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [incidentPhotos, setIncidentPhotos] = useState<{ uri: string; data: string }[]>([]);
@@ -52,10 +50,9 @@ export default function MapScreen() {
     let active = true;
     api.getMap().then((snapshot: MapSnapshot) => {
       if (!active) return;
-      setDangerZones(snapshot.dangerZones);
-      const mapSites = toMapSites(snapshot);
+      setDangerZones(withDemonstrationHazards(snapshot.dangerZones));
+      const mapSites = withDemonstrationSites(toMapSites(snapshot));
       setSites(mapSites);
-      if (mapSites.length) setRouteTo((current) => mapSites.some((site) => site.id === current) ? current : mapSites[0].id);
       setAllIncidents(snapshot.incidents.map((item) => ({
         id: item.id,
         category: item.category,
@@ -75,12 +72,35 @@ export default function MapScreen() {
     });
     return () => { active = false; };
   }, []));
-  const incidents = useMemo(() => allIncidents.filter((incident) => incident.category !== 'Fire' && incident.category !== 'Flooding'), [allIncidents]);
-  const routeOptions = useMemo(() => [{ id: 'me', title: 'My location', coordinate: mock.me }, ...sites, ...(customDestination ? [customDestination] : [])], [customDestination, sites]);
-  const from = routeOptions.find((point) => point.id === routeFrom) ?? routeOptions[0];
-  const to = routeOptions.find((point) => point.id === routeTo) ?? emergencySites[0];
 
-  async function calculateRoute(start: RouteOption['coordinate'], destination: RouteOption['coordinate']) {
+  useEffect(() => {
+    let active = true;
+
+    async function loadMapLocation() {
+      try {
+        const permission = await Location.requestForegroundPermissionsAsync();
+        if (permission.status !== 'granted') return;
+        const current = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+        if (active) setMapLocation({ latitude: current.coords.latitude, longitude: current.coords.longitude });
+      } catch {
+        // Keep the clearly visible demonstration fallback if a location is unavailable.
+      }
+    }
+
+    void loadMapLocation();
+    return () => { active = false; };
+  }, []);
+
+  const incidents = useMemo(() => allIncidents.filter((incident) => incident.category !== 'Fire' && incident.category !== 'Flooding'), [allIncidents]);
+  const nearestSafe = useMemo(() => nearestSafeSite(sites, mapLocation), [mapLocation, sites]);
+  const mapNearbyPeople = useMemo(() => nearbyPeople.map((person) => ({
+    ...person,
+    coordinate: {
+      latitude: mapLocation.latitude + person.coordinate.latitude - mock.me.latitude,
+      longitude: mapLocation.longitude + person.coordinate.longitude - mock.me.longitude,
+    },
+  })), [mapLocation]);
+  async function calculateRoute(start: Coordinate, destination: Coordinate) {
     if (app.offline) {
       setRouteError('Offline — reconnect to calculate a road route.');
       return;
@@ -121,10 +141,9 @@ export default function MapScreen() {
       if (helpKind !== 'Request resources') app.setSos(true);
       try {
         const snapshot = await api.getMap();
-        setDangerZones(snapshot.dangerZones);
-        const mapSites = toMapSites(snapshot);
+        setDangerZones(withDemonstrationHazards(snapshot.dangerZones));
+        const mapSites = withDemonstrationSites(toMapSites(snapshot));
         setSites(mapSites);
-        if (mapSites.length) setRouteTo((current) => mapSites.some((site) => site.id === current) ? current : mapSites[0].id);
         setAllIncidents(snapshot.incidents.map((item) => ({ id: item.id, category: item.category, description: item.description, approximateLocation: item.approximateLocation, submittedAt: item.submittedAt, updatedAt: item.updatedAt, source: item.source, verificationStatus: item.verificationStatus, incidentStatus: item.status })));
       } catch { /* The submission succeeded; keep the currently loaded map. */ }
       if (photoUploadFailed) Alert.alert('Report sent', 'Your report was received, but one or more photos could not be uploaded.');
@@ -153,10 +172,6 @@ export default function MapScreen() {
     setIncidentPhotos((current) => [...current, ...accepted.map((asset) => ({ uri: asset.uri, data: `data:image/jpeg;base64,${asset.base64}` }))].slice(0, 3));
   }
 
-  async function planRoute() {
-    await calculateRoute(from.coordinate, to.coordinate);
-  }
-
   async function openHelpMenu() {
     setHelpMenuOpen(true);
     setManualLocation(false);
@@ -183,36 +198,35 @@ export default function MapScreen() {
         offline={app.offline}
         dangerZones={dangerZones}
         emergencySites={sites}
+        nearbyPeople={mapNearbyPeople}
+        userLocation={mapLocation}
         plannedRoute={safeRoute?.coordinates}
-        destination={customDestination?.coordinate}
+        destination={customDestination ?? undefined}
         incidents={incidents}
         selectedId={selectedId}
         onSelect={(id) => {
-          setSelectedId(id);
+          setSelectedId((current) => current === id ? null : id);
           setSelectedDangerId(null);
           setSelectedSiteId(null);
         }}
         onSelectDanger={(id) => {
-          setSelectedDangerId(id);
+          setSelectedDangerId((current) => current === id ? null : id);
           setSelectedId(null);
           setSelectedSiteId(null);
         }}
         onSelectSite={(id) => {
-          setSelectedSiteId(id);
+          setSelectedSiteId((current) => current === id ? null : id);
           setSelectedId(null);
           setSelectedDangerId(null);
         }}
         onDestinationLongPress={(coordinate) => {
-          const destination = { id: 'dropped-pin', title: 'Dropped pin', coordinate };
-          setCustomDestination(destination);
-          setRouteTo(destination.id);
+          setCustomDestination(coordinate);
           setSafeRoute(null);
           setRouteError(null);
           setSelectedId(null);
           setSelectedDangerId(null);
           setSelectedSiteId(null);
-          setPlannerOpen(true);
-          void calculateRoute(mock.me, coordinate);
+          void calculateRoute(mapLocation, coordinate);
         }}
       />
 
@@ -230,23 +244,26 @@ export default function MapScreen() {
           selectedId={selectedId}
           selectedDanger={dangerZones.find((zone) => zone.id === selectedDangerId)}
           selectedSite={sites.find((site) => site.id === selectedSiteId)}
-          plannerOpen={plannerOpen}
-          setPlannerOpen={setPlannerOpen}
-          routeOptions={routeOptions}
-          routeFrom={routeFrom}
-          routeTo={routeTo}
-          setRouteFrom={(id) => {
-            setRouteFrom(id);
-            setSafeRoute(null);
-          }}
-          setRouteTo={(id) => {
-            setRouteTo(id);
-            setSafeRoute(null);
-          }}
           safeRoute={safeRoute}
           routeLoading={routeLoading}
           routeError={routeError}
-          onPlanRoute={planRoute}
+          nearestSafe={nearestSafe}
+          onPlanNearest={() => {
+            if (!nearestSafe) return;
+            setSafeRoute(null);
+            setRouteError(null);
+            void calculateRoute(mapLocation, nearestSafe.site.coordinate);
+          }}
+          onPlanSite={(site) => {
+            setSafeRoute(null);
+            setRouteError(null);
+            void calculateRoute(mapLocation, site.coordinate);
+          }}
+          onCloseRoute={() => {
+            setSafeRoute(null);
+            setRouteError(null);
+            setCustomDestination(null);
+          }}
           onClose={() => {
             setSelectedId(null);
             setSelectedDangerId(null);
@@ -279,8 +296,6 @@ export default function MapScreen() {
   );
 }
 
-type RouteOption = { id: string; title: string; coordinate: { latitude: number; longitude: number }; kind?: EmergencySite['kind'] };
-
 function toMapSites(snapshot: MapSnapshot): EmergencySite[] {
   const rendezvous = snapshot.rendezvousPoints.flatMap((point) => {
     const { latitude, longitude } = point.location;
@@ -290,58 +305,60 @@ function toMapSites(snapshot: MapSnapshot): EmergencySite[] {
   return [...snapshot.emergencySites, ...rendezvous];
 }
 
+/** Keep the requested demonstration hazards visible when the API returns its own map snapshot. */
+function withDemonstrationHazards(remoteZones: MapSnapshot['dangerZones']): DangerZone[] {
+  const demonstrationIds = new Set(demonstrationDangerZones.map((zone) => zone.id));
+  return [...demonstrationDangerZones, ...remoteZones.filter((zone) => !demonstrationIds.has(zone.id))];
+}
+
+/** Keep the demonstration shelter on the map when the API snapshot has no emergency sites. */
+function withDemonstrationSites(remoteSites: EmergencySite[]): EmergencySite[] {
+  const demonstrationIds = new Set(emergencySites.map((site) => site.id));
+  return [...emergencySites, ...remoteSites.filter((site) => !demonstrationIds.has(site.id))];
+}
+
+function nearestSafeSite(sites: EmergencySite[], from: Coordinate) {
+  const safeSites = sites.filter((site) => site.kind === 'safe_zone' || site.kind === 'shelter');
+  return safeSites.reduce<{ site: EmergencySite; distanceKm: number } | null>((nearest, site) => {
+    const distanceKm = distanceInKm(from, site.coordinate);
+    return !nearest || distanceKm < nearest.distanceKm ? { site, distanceKm } : nearest;
+  }, null);
+}
+
+function distanceInKm(from: Coordinate, to: Coordinate) {
+  const latitude = ((to.latitude - from.latitude) * Math.PI) / 180;
+  const longitude = ((to.longitude - from.longitude) * Math.PI) / 180;
+  const a = Math.sin(latitude / 2) ** 2 + Math.cos((from.latitude * Math.PI) / 180) * Math.cos((to.latitude * Math.PI) / 180) * Math.sin(longitude / 2) ** 2;
+  return 6371 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
 function BottomCard({
   selectedId,
   selectedDanger,
   selectedSite,
-  plannerOpen,
-  setPlannerOpen,
-  routeOptions,
-  routeFrom,
-  routeTo,
-  setRouteFrom,
-  setRouteTo,
   safeRoute,
   routeLoading,
   routeError,
-  onPlanRoute,
+  nearestSafe,
+  onPlanNearest,
+  onPlanSite,
+  onCloseRoute,
   onClose,
 }: {
   selectedId: string | null;
   selectedDanger?: DangerZone;
   selectedSite?: EmergencySite;
-  plannerOpen: boolean;
-  setPlannerOpen: (open: boolean) => void;
-  routeOptions: RouteOption[];
-  routeFrom: string;
-  routeTo: string;
-  setRouteFrom: (id: string) => void;
-  setRouteTo: (id: string) => void;
   safeRoute: SafeRoute | null;
   routeLoading: boolean;
   routeError: string | null;
-  onPlanRoute: () => void;
+  nearestSafe: { site: EmergencySite; distanceKm: number } | null;
+  onPlanNearest: () => void;
+  onPlanSite: (site: EmergencySite) => void;
+  onCloseRoute: () => void;
   onClose: () => void;
 }) {
   const app = useApp();
   const incident = demonstrationIncidents.find((i) => i.id === selectedId);
-
-  if (plannerOpen) {
-    return (
-      <RoutePlanner
-        routeOptions={routeOptions}
-        routeFrom={routeFrom}
-        routeTo={routeTo}
-        setRouteFrom={setRouteFrom}
-        setRouteTo={setRouteTo}
-        safeRoute={safeRoute}
-        routeLoading={routeLoading}
-        routeError={routeError}
-        onPlanRoute={onPlanRoute}
-        onClose={() => setPlannerOpen(false)}
-      />
-    );
-  }
 
   if (app.route === 'basement') {
     return (
@@ -379,6 +396,27 @@ function BottomCard({
     );
   }
 
+  if (routeLoading || safeRoute || routeError) {
+    return (
+      <Animated.View entering={FadeInDown} key="safe-route">
+        <Card style={{ borderLeftWidth: 5, borderLeftColor: routeError ? colors.red : colors.green }}>
+          <View style={styles.row}>
+            <View style={[styles.incidentIcon, { backgroundColor: routeError ? colors.red : colors.green }]}>
+              <Ionicons name={routeLoading ? 'hourglass' : routeError ? 'alert' : 'navigate'} size={21} color="#fff" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.kicker, { color: routeError ? colors.red : colors.green }]}>{routeLoading ? 'FINDING SAFE ROUTE' : routeError ? 'ROUTE UNAVAILABLE' : 'SAFE ROUTE ACTIVE'}</Text>
+              <Text style={styles.title}>{routeLoading ? 'Finding the shortest safe route…' : routeError ? 'Could not calculate a route' : 'Shortest route ready'}</Text>
+            </View>
+            <Pressable onPress={onCloseRoute} accessibilityRole="button" accessibilityLabel="Close route" hitSlop={10}><Ionicons name="close" size={22} color={colors.textDim} /></Pressable>
+          </View>
+          {safeRoute && <Text style={styles.body}>{safeRoute.distanceKm.toFixed(1)} km · {safeRoute.durationMinutes} min · avoids {safeRoute.avoidedZoneIds.length} danger zone{safeRoute.avoidedZoneIds.length === 1 ? '' : 's'}</Text>}
+          {routeError && <Text style={styles.routeError}>{routeError}</Text>}
+        </Card>
+      </Animated.View>
+    );
+  }
+
   if (selectedDanger) {
     const color = dangerColor(selectedDanger);
     return (
@@ -386,7 +424,7 @@ function BottomCard({
         <Card style={{ borderLeftWidth: 5, borderLeftColor: color }}>
           <View style={styles.row}>
             <View style={[styles.incidentIcon, { backgroundColor: color }]}>
-              <Ionicons name={selectedDanger.kind === 'fire' ? 'flame' : selectedDanger.kind === 'flooding' ? 'water' : 'warning'} size={21} color="#fff" />
+              <Ionicons name={selectedDanger.kind === 'fire' ? 'flame' : selectedDanger.kind === 'flooding' ? 'water' : selectedDanger.kind === 'riot' ? 'people' : 'warning'} size={21} color="#fff" />
             </View>
             <View style={{ flex: 1 }}>
               <Text style={[styles.kicker, { color }]}>ACTIVE DANGER · {selectedDanger.severity.toUpperCase()}</Text>
@@ -395,6 +433,7 @@ function BottomCard({
             <Pressable onPress={onClose} accessibilityRole="button" accessibilityLabel="Close" hitSlop={10}><Ionicons name="close" size={22} color={colors.textDim} /></Pressable>
           </View>
           <Text style={styles.body}>{selectedDanger.summary}</Text>
+          <Text style={[styles.dangerInstruction, { color }]}>{dangerAction(selectedDanger)}</Text>
           <Text style={styles.muted}>Danger radius: {Math.round(selectedDanger.radius)} m</Text>
         </Card>
       </Animated.View>
@@ -417,7 +456,7 @@ function BottomCard({
           </View>
           <Text style={styles.body}>{selectedSite.summary}</Text>
           {selectedSite.capacity && <Text style={styles.muted}>{selectedSite.capacity}</Text>}
-          <Button icon="navigate" label="Plan safe route here" color={colors.green} onPress={() => { setRouteTo(selectedSite.id); setPlannerOpen(true); }} />
+          <Button icon="navigate" label="Plan safe route here" color={colors.green} onPress={() => onPlanSite(selectedSite)} />
         </Card>
       </Animated.View>
     );
@@ -453,96 +492,37 @@ function BottomCard({
     );
   }
 
-  const e = mock.evacuation;
+  if (!nearestSafe) return null;
+  const { site, distanceKm } = nearestSafe;
   return (
-    <Animated.View entering={FadeInDown} key="evac">
+    <Animated.View entering={FadeInDown} key={site.id}>
       <Card>
-        <Text style={[styles.kicker, { color: colors.green }]}>NEAREST SAFE POINT</Text>
-        <Text style={styles.title}>{e.name}</Text>
+        <Text style={[styles.kicker, { color: colors.green }]}>NEAREST SAFE PLACE</Text>
+        <Text style={styles.title}>{site.title}</Text>
         <View style={styles.row}>
-          <Info icon="navigate" text="5.0 km" />
-          <Info icon="walk" text="approx. 65 min" />
-          <Info icon="people" text={e.capacity} />
+          <Info icon="navigate" text={`${distanceKm.toFixed(1)} km away`} />
+          {site.capacity && <Info icon="people" text={site.capacity} />}
         </View>
-        <Text style={styles.routeHint}>Or long-press anywhere on the map to set a custom destination.</Text>
-        <Button icon="navigate" label="Plan a safe road route" color={colors.green} onPress={() => setPlannerOpen(true)} />
+        <Text style={styles.muted}>{site.summary}</Text>
+        <Button icon="navigate" label="Route to safe place" color={colors.green} onPress={onPlanNearest} />
       </Card>
     </Animated.View>
-  );
-}
-
-function RoutePlanner({
-  routeOptions,
-  routeFrom,
-  routeTo,
-  setRouteFrom,
-  setRouteTo,
-  safeRoute,
-  routeLoading,
-  routeError,
-  onPlanRoute,
-  onClose,
-}: {
-  routeOptions: RouteOption[];
-  routeFrom: string;
-  routeTo: string;
-  setRouteFrom: (id: string) => void;
-  setRouteTo: (id: string) => void;
-  safeRoute: SafeRoute | null;
-  routeLoading: boolean;
-  routeError: string | null;
-  onPlanRoute: () => void;
-  onClose: () => void;
-}) {
-  return (
-    <Animated.View entering={FadeInDown} key="planner">
-      <Card style={{ borderWidth: 2, borderColor: colors.green }}>
-        <View style={styles.row}>
-          <View style={[styles.incidentIcon, { backgroundColor: colors.green }]}><Ionicons name="navigate" size={20} color="#fff" /></View>
-          <View style={{ flex: 1 }}>
-            <Text style={[styles.kicker, { color: colors.green }]}>SAFE ROAD ROUTE</Text>
-            <Text style={styles.title}>Find the shortest safe route</Text>
-          </View>
-          <Pressable onPress={onClose} accessibilityRole="button" accessibilityLabel="Close route planner" hitSlop={10}><Ionicons name="close" size={22} color={colors.textDim} /></Pressable>
-        </View>
-        <RoutePointPicker label="A · Start" selected={routeFrom} points={routeOptions} onSelect={setRouteFrom} />
-        <RoutePointPicker label="B · Destination" selected={routeTo} points={routeOptions.filter((point) => point.id !== 'me')} onSelect={setRouteTo} />
-        <Text style={styles.routeHint}>Long-press a map location to use it as a custom destination.</Text>
-        {safeRoute && (
-          <View style={styles.routeSummary}>
-            <Ionicons name="shield-checkmark" size={17} color={colors.green} />
-            <Text style={styles.routeSummaryText}>Shortest verified route · {safeRoute.distanceKm.toFixed(1)} km · {safeRoute.durationMinutes} min · avoids {safeRoute.avoidedZoneIds.length} zone{safeRoute.avoidedZoneIds.length === 1 ? '' : 's'}</Text>
-          </View>
-        )}
-        {routeError && <Text style={styles.routeError}>{routeError}</Text>}
-        <Text style={styles.routeDisclaimer}>Uses roads from OpenStreetMap. Check official instructions before travelling.</Text>
-        <Button icon={routeLoading ? 'hourglass' : 'navigate'} label={routeLoading ? 'Finding shortest safe route…' : 'Find shortest safe route'} color={colors.green} disabled={routeLoading} onPress={onPlanRoute} />
-      </Card>
-    </Animated.View>
-  );
-}
-
-function RoutePointPicker({ label, selected, points, onSelect }: { label: string; selected: string; points: RouteOption[]; onSelect: (id: string) => void }) {
-  return (
-    <View style={{ gap: 6 }}>
-      <Text style={styles.kicker}>{label}</Text>
-      <View style={styles.routeChoices}>
-        {points.map((point) => (
-          <Pressable key={point.id} onPress={() => onSelect(point.id)} style={[styles.routeChoice, point.id === selected && styles.routeChoiceActive]}>
-            <Text style={[styles.routeChoiceText, point.id === selected && styles.routeChoiceTextActive]}>{point.title}</Text>
-          </Pressable>
-        ))}
-      </View>
-    </View>
   );
 }
 
 function dangerColor(zone: DangerZone) {
-  return zone.kind === 'flooding' ? colors.violet : zone.kind === 'fire' ? '#F04438' : colors.red;
+  return zone.kind === 'flooding' ? colors.violet : zone.kind === 'fire' ? '#F04438' : zone.kind === 'riot' ? colors.orange : colors.red;
 }
 
 function siteColor(site: EmergencySite) {
   return site.kind === 'shelter' ? colors.green : site.kind === 'aid' ? colors.orange : colors.blue;
+}
+
+function dangerAction(zone: DangerZone) {
+  if (zone.kind === 'attack') return 'Take cover. Avoid the area.';
+  if (zone.kind === 'fire') return 'Avoid smoke and leave room for responders.';
+  if (zone.kind === 'flooding') return 'Do not cross this road or underpass.';
+  return 'Avoid the area and follow police instructions.';
 }
 
 function Info({ icon, text }: { icon: keyof typeof Ionicons.glyphMap; text: string }) {
@@ -557,16 +537,8 @@ function Info({ icon, text }: { icon: keyof typeof Ionicons.glyphMap; text: stri
 const styles = StyleSheet.create({
   root: { flex: 1 },
   accountButton: { position: 'absolute', top: 12, right: 12, width: 42, height: 42, alignItems: 'center', justifyContent: 'center', borderRadius: 21, backgroundColor: colors.card },
-  routeChoices: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
-  routeChoice: { backgroundColor: colors.bg, borderColor: colors.border, borderWidth: 1, borderRadius: radius.sm, paddingHorizontal: 9, paddingVertical: 7 },
-  routeChoiceActive: { backgroundColor: colors.green, borderColor: colors.green },
-  routeChoiceText: { color: colors.textMuted, fontSize: 11, fontWeight: '700' },
-  routeChoiceTextActive: { color: '#fff' },
-  routeSummary: { flexDirection: 'row', alignItems: 'center', gap: 7, backgroundColor: colors.greenSoft, borderRadius: radius.sm, padding: 9 },
-  routeSummaryText: { flex: 1, color: colors.green, fontSize: 12, fontWeight: '800' },
   routeError: { color: colors.red, fontSize: 12, fontWeight: '700' },
-  routeDisclaimer: { color: colors.textMuted, fontSize: 11, lineHeight: 15 },
-  routeHint: { color: colors.textMuted, fontSize: 11, lineHeight: 15 },
+  dangerInstruction: { fontSize: 13, fontWeight: '800' },
   bottom: { position: 'absolute', left: 0, right: 0, bottom: 0, padding: 12 },
   sosRow: { alignItems: 'center', marginBottom: 4 },
   helpPage: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, backgroundColor: colors.bg },

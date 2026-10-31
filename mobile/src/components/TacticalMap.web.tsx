@@ -43,7 +43,7 @@ function incidentPoint(incident: Incident): [number, number] | null {
   return latitude == null || longitude == null ? null : [latitude, longitude];
 }
 
-function Camera({ shelling, sos, route, incidents, selectedId }: TacticalMapProps) {
+function Camera({ shelling, sos, route, incidents, selectedId, userLocation = mock.me }: TacticalMapProps) {
   const map = useMap();
   const selected = incidents.find((i) => i.id === selectedId);
   const target = selected ? incidentPoint(selected) : null;
@@ -51,16 +51,16 @@ function Camera({ shelling, sos, route, incidents, selectedId }: TacticalMapProp
   useEffect(() => {
     if (route === 'basement') map.flyToBounds(L.latLngBounds(mock.basementRoute.map(ll)), { padding: [80, 80], duration: 1 });
     else if (route === 'evacuation') map.flyToBounds(START_BOUNDS, { padding: [30, 30], duration: 1 });
-    else if (shelling || sos) map.flyTo(ll(mock.me), 15, { duration: 1 });
+    else if (shelling || sos || userLocation.latitude !== mock.me.latitude || userLocation.longitude !== mock.me.longitude) map.flyTo(ll(userLocation), 15, { duration: 1 });
     else if (targetKey) map.flyTo(targetKey.split(',').map(Number) as [number, number], 15, { duration: 0.8 });
     else map.flyToBounds(START_BOUNDS, { padding: [30, 30], duration: 1 });
-  }, [map, shelling, sos, route, targetKey]);
+  }, [map, shelling, sos, route, targetKey, userLocation]);
   return null;
 }
 
 export function TacticalMap(props: TacticalMapProps) {
   const [tileUnavailable, setTileUnavailable] = useState(false);
-  const { shelling, sos, route, showBasement, incidents, selectedId, onSelect, dangerZones = [], emergencySites = [], plannedRoute, onSelectDanger, onSelectSite } = props;
+  const { shelling, sos, route, showBasement, showCommunityReports = false, incidents, selectedId, onSelect, dangerZones = [], emergencySites = [], nearbyPeople = [], plannedRoute, userLocation = mock.me, onSelectDanger, onSelectSite } = props;
 
   return (
     <View style={styles.root}>
@@ -70,7 +70,7 @@ export function TacticalMap(props: TacticalMapProps) {
             className="osm-light"
             url={tileUrl}
             attribution={tileAttribution}
-            maxZoom={16}
+            maxZoom={14}
             updateWhenIdle
             updateWhenZooming={false}
             keepBuffer={1}
@@ -79,7 +79,7 @@ export function TacticalMap(props: TacticalMapProps) {
         )}
         <Camera {...props} />
 
-        {incidents.map((incident) => {
+        {showCommunityReports && incidents.map((incident) => {
           const pos = incidentPoint(incident);
           if (!pos) return null;
           const color = incidentColors[incident.category] ?? colors.blue;
@@ -108,7 +108,7 @@ export function TacticalMap(props: TacticalMapProps) {
               {[1, 0.7, 0.42].map((factor) => (
                 <Circle key={factor} center={ll(zone.coordinate)} radius={zone.radius * factor} pathOptions={{ color: factor === 1 ? color : 'transparent', weight: factor === 1 ? 2 : 0, fillColor: color, fillOpacity: factor === 1 ? 0.1 : factor === 0.7 ? 0.13 : 0.2 }} />
               ))}
-              <Marker position={ll(zone.coordinate)} icon={icon(`<div class="m-danger" style="--c:${color}">${dangerSymbol(zone)}</div>`, [38, 38])} eventHandlers={{ click: () => onSelectDanger?.(zone.id) }} />
+              <Marker position={ll(zone.coordinate)} icon={icon(`<div class="m-danger" style="--c:${color}">${dangerSymbol(zone)}<div class="m-label">${dangerLabel(zone)}</div></div>`, [38, 38])} eventHandlers={{ click: () => onSelectDanger?.(zone.id) }} />
             </span>
           );
         })}
@@ -138,6 +138,10 @@ export function TacticalMap(props: TacticalMapProps) {
           <Marker key={site.id} position={ll(site.coordinate)} icon={icon(`<div class="m-site" style="--c:${siteColor(site)}">${siteSymbol(site)}<div class="m-label">${site.title}</div></div>`, [38, 38])} eventHandlers={{ click: () => onSelectSite?.(site.id) }} />
         ))}
 
+        {nearbyPeople.map((person) => (
+          <Marker key={person.id} position={ll(person.coordinate)} icon={icon(`<div class="m-person-nearby">${person.initials}<div class="m-label">${person.name} · ${person.distance}</div></div>`, [32, 32])} />
+        ))}
+
         {sos &&
           nearby.map((p, i) => (
             <Marker key={i} position={ll(p)} icon={icon('<div class="m-dot"></div>', [10, 10])} interactive={false} />
@@ -155,11 +159,11 @@ export function TacticalMap(props: TacticalMapProps) {
         )}
 
         <Marker
-          position={ll(mock.me)}
+          position={ll(userLocation)}
           zIndexOffset={1000}
           icon={icon(
-            `<div class="m-me ${sos ? 'sos' : ''}" style="--c:${sos ? colors.red : colors.blue}"><div class="m-label">${sos ? 'You · SOS' : 'You · 🔒 private'}</div></div>`,
-            [22, 22],
+            `<div class="m-me ${sos ? 'sos' : ''}" style="--c:${sos ? colors.red : colors.blue}">⌖<div class="m-label">${sos ? 'SOS · your location' : 'YOU · your location'}</div></div>`,
+            [34, 34],
           )}
         />
       </MapContainer>
@@ -170,11 +174,15 @@ export function TacticalMap(props: TacticalMapProps) {
 }
 
 function dangerColor(zone: DangerZone) {
-  return zone.kind === 'flooding' ? colors.violet : zone.kind === 'fire' ? '#F04438' : colors.red;
+  return zone.kind === 'flooding' ? colors.violet : zone.kind === 'fire' ? '#F04438' : zone.kind === 'riot' ? colors.orange : colors.red;
 }
 
 function dangerSymbol(zone: DangerZone) {
-  return zone.kind === 'fire' ? '♨' : zone.kind === 'flooding' ? '≈' : '⚠';
+  return zone.kind === 'fire' ? '♨' : zone.kind === 'flooding' ? '≈' : zone.kind === 'riot' ? '!' : '⚠';
+}
+
+function dangerLabel(zone: DangerZone) {
+  return zone.kind === 'fire' ? 'FIRE' : zone.kind === 'riot' ? 'RIOT' : zone.kind === 'attack' ? 'ATTACK' : 'FLOOD';
 }
 
 function siteColor(site: EmergencySite) {
