@@ -18,9 +18,12 @@ type HelpFeedItem = {
   author: string;
   distance: string;
   tags: string[];
+  isMine?: boolean;
   description?: string;
   photos?: string[];
 };
+
+type ChatMessage = { id: string; text: string; sentAt: string };
 
 const MAX_PHOTOS = 3;
 
@@ -32,12 +35,16 @@ export default function HelpScreen() {
   const [description, setDescription] = useState('');
   const [photos, setPhotos] = useState<string[]>([]);
   const [localOffers, setLocalOffers] = useState<HelpFeedItem[]>([]);
+  const [editingOfferId, setEditingOfferId] = useState<string | null>(null);
+  const [activeChat, setActiveChat] = useState<HelpFeedItem | null>(null);
+  const [chatThreads, setChatThreads] = useState<Record<string, ChatMessage[]>>({});
 
   function closeOfferModal() {
     setOfferModalVisible(false);
     setSelectedCategories([]);
     setDescription('');
     setPhotos([]);
+    setEditingOfferId(null);
   }
 
   function toggleCategory(category: string) {
@@ -68,18 +75,46 @@ export default function HelpScreen() {
       return;
     }
     const categoryTitle = selectedCategories.join(' · ');
-    setLocalOffers((current) => [{
-      id: `local-${Date.now()}`,
+    const offer: HelpFeedItem = {
+      id: editingOfferId || `local-${Date.now()}`,
       type: 'offer',
       icon: 'hand-left',
       title: categoryTitle,
       author: 'You',
       distance: 'Location not shared',
       tags: selectedCategories,
+      isMine: true,
       description: description.trim() || undefined,
       photos: photos.length ? photos : undefined,
-    }, ...current]);
+    };
+    setLocalOffers((current) => editingOfferId
+      ? current.map((item) => item.id === editingOfferId ? offer : item)
+      : [offer, ...current]);
     closeOfferModal();
+  }
+
+  function editOffer(offer: HelpFeedItem) {
+    setEditingOfferId(offer.id);
+    setSelectedCategories(offer.tags);
+    setDescription(offer.description || '');
+    setPhotos(offer.photos || []);
+    setOfferModalVisible(true);
+  }
+
+  function stopOffering(offerId: string) {
+    Alert.alert('Stop offering?', 'This offer will be removed from your Help feed.', [
+      { text: 'Keep offering', style: 'cancel' },
+      { text: 'Stop offering', style: 'destructive', onPress: () => setLocalOffers((current) => current.filter((item) => item.id !== offerId)) },
+    ]);
+  }
+
+  function sendChatMessage(requestId: string, text: string) {
+    const message = text.trim();
+    if (!message) return;
+    setChatThreads((current) => ({
+      ...current,
+      [requestId]: [...(current[requestId] || []), { id: `msg-${Date.now()}`, text: message, sentAt: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) }],
+    }));
   }
 
   return (
@@ -117,15 +152,16 @@ export default function HelpScreen() {
       )}
 
       {localOffers.map((item, i) => (
-        <HelpItem key={item.id} item={item} index={i} />
+        <HelpItem key={item.id} item={item} index={i} onEdit={editOffer} onStop={stopOffering} />
       ))}
 
       {mock.helpFeed.map((item, i) => (
-        <HelpItem key={item.id} item={item} index={i} />
+        <HelpItem key={item.id} item={item} index={i} onChat={setActiveChat} />
       ))}
 
       <OfferHelpModal
         visible={offerModalVisible}
+        editing={editingOfferId !== null}
         selectedCategories={selectedCategories}
         description={description}
         photos={photos}
@@ -136,12 +172,19 @@ export default function HelpScreen() {
         onRemovePhoto={(uri) => setPhotos((current) => current.filter((photo) => photo !== uri))}
         onPublish={publishOffer}
       />
+      <CoordinationChat
+        request={activeChat}
+        messages={activeChat ? chatThreads[activeChat.id] || [] : []}
+        onClose={() => setActiveChat(null)}
+        onSend={(text) => activeChat && sendChatMessage(activeChat.id, text)}
+      />
     </ScrollView>
   );
 }
 
 function OfferHelpModal({
   visible,
+  editing,
   selectedCategories,
   description,
   photos,
@@ -153,6 +196,7 @@ function OfferHelpModal({
   onPublish,
 }: {
   visible: boolean;
+  editing: boolean;
   selectedCategories: string[];
   description: string;
   photos: string[];
@@ -165,12 +209,12 @@ function OfferHelpModal({
 }) {
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose} statusBarTranslucent>
-      <KeyboardAvoidingView style={styles.modalRoot} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <KeyboardAvoidingView style={styles.modalRoot} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
         <Pressable style={styles.scrim} onPress={onClose} accessibilityLabel="Close offer form" />
         <View style={styles.sheet}>
           <View style={styles.modalHeader}>
             <View style={styles.modalTitleWrap}>
-              <Text style={styles.modalTitle}>Offer help</Text>
+              <Text style={styles.modalTitle}>{editing ? 'Edit offer' : 'Offer help'}</Text>
               <Text style={styles.modalSubtitle}>Choose what you can safely provide.</Text>
             </View>
             <Pressable onPress={onClose} style={styles.closeButton} accessibilityRole="button" accessibilityLabel="Close">
@@ -236,7 +280,7 @@ function OfferHelpModal({
           </ScrollView>
 
           <View style={styles.modalActions}>
-            <Button label="Publish offer" icon="hand-left" color={colors.green} onPress={onPublish} />
+            <Button label={editing ? 'Save changes' : 'Publish offer'} icon={editing ? 'checkmark' : 'hand-left'} color={colors.green} onPress={onPublish} />
             <Pressable onPress={onClose} style={styles.cancelButton} accessibilityRole="button">
               <Text style={styles.cancelText}>Cancel</Text>
             </Pressable>
@@ -247,8 +291,77 @@ function OfferHelpModal({
   );
 }
 
-function HelpItem({ item, index }: { item: HelpFeedItem; index: number }) {
-  const [done, setDone] = useState(false);
+function CoordinationChat({ request, messages, onClose, onSend }: {
+  request: HelpFeedItem | null;
+  messages: ChatMessage[];
+  onClose: () => void;
+  onSend: (text: string) => void;
+}) {
+  const [draft, setDraft] = useState('');
+
+  function send() {
+    const text = draft.trim();
+    if (!text) return;
+    onSend(text);
+    setDraft('');
+  }
+
+  return (
+    <Modal visible={request !== null} transparent animationType="slide" onRequestClose={onClose} statusBarTranslucent>
+      <KeyboardAvoidingView style={styles.modalRoot} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+        <Pressable style={styles.scrim} onPress={onClose} accessibilityLabel="Close chat" />
+        <View style={styles.chatSheet}>
+          <View style={styles.chatHeader}>
+            <View style={styles.chatHeaderText}>
+              <Text style={styles.modalTitle}>Coordinate help</Text>
+              <Text style={styles.modalSubtitle}>{request?.author} · {request?.title}</Text>
+            </View>
+            <Pressable onPress={onClose} style={styles.closeButton} accessibilityRole="button" accessibilityLabel="Close chat">
+              <Ionicons name="close" size={22} color={colors.textMuted} />
+            </Pressable>
+          </View>
+
+          <ScrollView style={styles.messages} contentContainerStyle={styles.messagesContent} keyboardShouldPersistTaps="always">
+            {messages.length === 0 ? (
+              <View style={styles.emptyChat}>
+                <Ionicons name="chatbubbles-outline" size={28} color={colors.blue} />
+                <Text style={styles.emptyChatTitle}>Start coordinating</Text>
+                <Text style={styles.emptyChatBody}>Ask what is needed and agree on a safe way to help. Avoid sharing sensitive personal details.</Text>
+              </View>
+            ) : messages.map((message) => (
+              <View key={message.id} style={styles.messageRow}>
+                <View style={styles.outgoingBubble}>
+                  <Text style={styles.outgoingText}>{message.text}</Text>
+                  <Text style={styles.messageTime}>{message.sentAt}</Text>
+                </View>
+              </View>
+            ))}
+          </ScrollView>
+
+          <View style={styles.chatComposer}>
+            <Text style={styles.chatDemoNote}>Messages stay on this device in this demo.</Text>
+            <View style={styles.composerRow}>
+              <TextInput
+                value={draft}
+                onChangeText={setDraft}
+                placeholder="Write a message…"
+                placeholderTextColor={colors.textDim}
+                style={styles.messageInput}
+                maxLength={500}
+                multiline
+              />
+              <Pressable onPress={send} disabled={!draft.trim()} style={[styles.sendButton, !draft.trim() && styles.sendButtonDisabled]} accessibilityRole="button" accessibilityLabel="Send message">
+                <Ionicons name="send" size={18} color="#fff" />
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </KeyboardAvoidingView>
+    </Modal>
+  );
+}
+
+function HelpItem({ item, index, onEdit, onStop, onChat }: { item: HelpFeedItem; index: number; onEdit?: (item: HelpFeedItem) => void; onStop?: (id: string) => void; onChat?: (item: HelpFeedItem) => void }) {
   const offer = item.type === 'offer';
   const color = offer ? colors.green : colors.red;
 
@@ -280,13 +393,16 @@ function HelpItem({ item, index }: { item: HelpFeedItem; index: number }) {
             {item.photos.map((uri) => <Image key={uri} source={{ uri }} style={styles.listingPhoto} />)}
           </ScrollView>
         )}
-        <Button
-          icon={done ? 'checkmark-circle' : offer ? 'navigate' : 'hand-left'}
-          label={done ? 'Response sent' : offer ? 'I need this' : 'I can help'}
-          color={done ? colors.green : color}
-          outline={!done}
-          onPress={() => setDone(true)}
-        />
+        {item.isMine ? (
+          <View style={styles.offerActions}>
+            <Button icon="create-outline" label="Edit offering" color={colors.green} outline onPress={() => onEdit?.(item)} />
+            <Button icon="close-circle-outline" label="Stop offering" color={colors.red} outline onPress={() => onStop?.(item.id)} />
+          </View>
+        ) : (
+          offer
+            ? <Button icon="navigate" label="I need this" color={color} outline onPress={() => undefined} />
+            : <Button icon="chatbubble-ellipses" label="Chat" color={colors.blue} onPress={() => onChat?.(item)} />
+        )}
       </Card>
     </Animated.View>
   );
@@ -350,6 +466,25 @@ const styles = StyleSheet.create({
   modalActions: { paddingHorizontal: 20, paddingTop: 10, borderTopWidth: 1, borderTopColor: colors.border, gap: 4 },
   cancelButton: { height: 38, alignItems: 'center', justifyContent: 'center' },
   cancelText: { color: colors.textMuted, fontWeight: '700', fontSize: 14 },
+  chatSheet: { height: '78%', maxHeight: '88%', backgroundColor: colors.card, borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingTop: 18, paddingBottom: Platform.OS === 'ios' ? 26 : 16, ...shadow },
+  chatHeader: { minHeight: 64, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10, paddingHorizontal: 18, paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: colors.border },
+  chatHeaderText: { flex: 1, gap: 4 },
+  messages: { flex: 1 },
+  messagesContent: { flexGrow: 1, justifyContent: 'flex-end', padding: 16, gap: 10 },
+  emptyChat: { alignItems: 'center', alignSelf: 'center', maxWidth: 260, gap: 8, paddingVertical: 24 },
+  emptyChatTitle: { color: colors.text, fontSize: 16, fontWeight: '800' },
+  emptyChatBody: { color: colors.textMuted, fontSize: 13, lineHeight: 18, textAlign: 'center' },
+  messageRow: { alignItems: 'flex-end' },
+  outgoingBubble: { maxWidth: '84%', backgroundColor: colors.blue, borderRadius: 16, borderBottomRightRadius: 5, paddingHorizontal: 12, paddingVertical: 9, gap: 4 },
+  outgoingText: { color: '#fff', fontSize: 14, lineHeight: 19 },
+  messageTime: { color: '#D1E9FF', fontSize: 10, alignSelf: 'flex-end' },
+  chatComposer: { paddingHorizontal: 14, paddingTop: 8, borderTopWidth: 1, borderTopColor: colors.border, gap: 7 },
+  chatDemoNote: { color: colors.textDim, fontSize: 11, textAlign: 'center' },
+  composerRow: { flexDirection: 'row', alignItems: 'flex-end', gap: 8 },
+  messageInput: { flex: 1, maxHeight: 100, minHeight: 44, backgroundColor: colors.bg, borderColor: colors.border, borderWidth: 1, borderRadius: 20, paddingHorizontal: 14, paddingVertical: 10, color: colors.text, fontSize: 14 },
+  sendButton: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.blue },
+  sendButtonDisabled: { opacity: 0.45 },
   listingPhotos: { gap: 8, paddingVertical: 2 },
   listingPhoto: { width: 88, height: 72, borderRadius: radius.md, backgroundColor: colors.bg },
+  offerActions: { gap: 8 },
 });
