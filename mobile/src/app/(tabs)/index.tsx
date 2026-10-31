@@ -463,7 +463,6 @@ export default function MapScreen() {
             <ScrollView keyboardShouldPersistTaps="always" contentContainerStyle={styles.helpContent}>
               {(Object.keys(helpKinds) as HelpKind[]).map((kind) => <Pressable key={kind} onPress={() => { setHelpKind(kind); setRequest(''); }} style={[styles.helpOption, helpKind === kind && styles.helpOptionActive]}><Text style={styles.optionTitle}>{kind}</Text><Text style={styles.optionDetail}>{helpKinds[kind].join(' · ')}</Text></Pressable>)}
               {helpKind && <View style={styles.quickChoices}>{helpKinds[helpKind].map((example) => <Pressable key={example} onPress={() => setRequest(example)} style={[styles.quickChoice, request === example && styles.quickChoiceActive]}><Text style={styles.quickChoiceText}>{example}</Text></Pressable>)}</View>}
-              {helpKind && <TextInput value={request} onChangeText={setRequest} placeholder={helpKind === 'Emergency' ? 'Describe the help you need (optional)' : 'Other resource or request (optional)'} placeholderTextColor={colors.textDim} style={styles.input} />}
               <Text style={styles.muted}>Your current location is used automatically.</Text>
               <View style={{ gap: 8 }}>
                 <Text style={styles.kicker}>ADDITIONAL DETAILS (OPTIONAL)</Text>
