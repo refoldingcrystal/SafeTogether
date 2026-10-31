@@ -43,23 +43,104 @@
     { "latitude": 52.2262, "longitude": 21.0062 }
   ],
 
-  "meshChain": [
-    { "name": "Your phone", "detail": "SOS packet encrypted (AES-256)" },
-    { "name": "Neighbour one floor down", "detail": "Bluetooth · 6 m" },
-    { "name": "Mark, Hoża St.", "detail": "Bluetooth · 140 m" },
-    { "name": "Fire Service, City Centre", "detail": "Responders received your SOS" }
+  "meshNearby": {
+    "phones": 5,
+    "family": [
+      { "id": "kate", "proximity": "Very close · same building" },
+      { "id": "mom", "proximity": null },
+      { "id": "dad", "proximity": null }
+    ]
+  },
+
+  "meshInbox": [
+    {
+      "id": "sos-nearby",
+      "kind": "sos",
+      "title": "SOS · Injured, can’t walk",
+      "body": "Ground floor, 5 Piękna St.",
+      "from": "Anonymous phone",
+      "verified": false,
+      "distance": "120 m",
+      "direction": "north-east",
+      "hops": 1,
+      "expiresInHours": 24,
+      "arrivesAfterMs": 3800,
+      "route": null
+    },
+    {
+      "id": "evac",
+      "kind": "official",
+      "title": "Evacuation bus leaves 23:30 from Zbawiciela Sq.",
+      "body": "Bring documents, water and medicine. Priority for children and the elderly.",
+      "from": "Mazovian Voivode",
+      "verified": true,
+      "distance": "1.2 km",
+      "direction": "south-west",
+      "hops": 4,
+      "expiresInHours": 3,
+      "arrivesAfterMs": 2500,
+      "route": "evacuation"
+    },
+    {
+      "id": "danger",
+      "kind": "danger",
+      "title": "Collapsed building – 21 Hoża St.",
+      "body": "Smell of gas. Avoid the street.",
+      "from": "Anonymous phone",
+      "verified": false,
+      "distance": "350 m",
+      "direction": "north-east",
+      "hops": 2,
+      "expiresInHours": 6,
+      "arrivesAfterMs": 5000,
+      "route": null
+    },
+    {
+      "id": "basement",
+      "kind": "shelter",
+      "title": "Safe basement – 12 Wilcza St. · room for 6",
+      "body": "There is water and power from a generator. Come to us.",
+      "from": "Anna K.",
+      "verified": false,
+      "distance": "550 m",
+      "direction": "south-west",
+      "hops": 1,
+      "expiresInHours": 12,
+      "arrivesAfterMs": 7200,
+      "route": "basement"
+    },
+    {
+      "id": "insulin",
+      "kind": "need",
+      "title": "Need insulin for a diabetic child",
+      "body": "Flat 4, 8 Krucza St. Please knock twice.",
+      "from": "Ola M.",
+      "verified": false,
+      "distance": "300 m",
+      "direction": "west",
+      "hops": 1,
+      "expiresInHours": 6,
+      "arrivesAfterMs": 9500,
+      "route": null
+    }
   ],
 
+  "meshReply": {
+    "id": "reply-anna",
+    "kind": "reply",
+    "title": "Anna K. is coming to help you",
+    "body": "Replied to your SOS over the mesh.",
+    "from": "Anna K.",
+    "verified": false,
+    "distance": "550 m",
+    "direction": "south-west",
+    "hops": 1,
+    "expiresInHours": 2,
+    "arrivesAfterMs": 4000,
+    "route": null
+  },
+
   "helpFeed": [
-    {
-      "id": "water",
-      "type": "offer",
-      "icon": "water",
-      "title": "Drinking water distribution point",
-      "author": "Red Cross · official",
-      "distance": "400 m",
-      "tags": ["Water", "Until 23:00"]
-    },
     {
       "id": "doctor",
       "type": "request",
@@ -68,15 +149,6 @@
       "author": "John W.",
       "distance": "700 m",
       "tags": ["Urgent", "Bleeding"]
-    },
-    {
-      "id": "bus",
-      "type": "offer",
-      "icon": "bus",
-      "title": "6 free seats on an evacuation bus",
-      "author": "Ocalenie Foundation",
-      "distance": "1.2 km",
-      "tags": ["Leaves 23:30", "Zbawiciela Sq."]
     },
     {
       "id": "power",

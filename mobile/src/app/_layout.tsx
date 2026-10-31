@@ -3,7 +3,7 @@ import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { AppProvider } from '@/state/app';
-import { DemoBar, P2PNotification, PhoneStatusBar } from '@/components/ui';
+import { DemoBar, PhoneStatusBar } from '@/components/ui';
 import { colors } from '@/theme';
 
 export default function RootLayout() {
@@ -19,7 +19,6 @@ export default function RootLayout() {
               <Stack.Screen name="(tabs)" />
               <Stack.Screen name="guide/[id]" />
             </Stack>
-            <P2PNotification />
           </View>
         </SafeAreaView>
       </AppProvider>

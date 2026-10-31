@@ -1,6 +1,6 @@
 # SafeTogether implementation plan
 
-This plan turns the current local prototype into a product foundation without having several people change the same files. It assumes four collaborators working by product feature rather than fixed file ownership.
+This plan turns the current local prototype into a product foundation without having several people change the same files. It assumes five collaborators working by product feature rather than fixed file ownership.
 
 ## First team decision
 
@@ -41,103 +41,120 @@ AuditEvent: id, action, actorId, targetType, targetId, createdAt
 
 Define public visibility separately from internal data. Public records must never contain a residential address, private contact details, attachments without authorization, or internal review notes.
 
-Suggested team tasks:
+Suggested shared tasks:
 
-- Collaborator 4 drafts `docs/api-contract.md` with request/response examples and error formats.
-- The four collaborators agree on the backend, database, deployment environment, and authentication provider.
-- Collaborator 4 proposes the Expo app structure, native navigation, and repeatable mobile lint, test, and build commands.
+- The five collaborators agree on the backend, database, deployment environment, and authentication provider.
+- Agree on the API contract, public/private field rules, native navigation, and mobile lint, test, and build commands before a panel depends on them.
 - Any shared-state, route, or design-system change gets team review before integration.
 
 Definition of done: feature owners can build against a stable record shape and know which data is public, private, queued, stale, or live.
 
 ## Phase 1 — feature workstreams that can start now
 
-### Collaborator 1 — report and community assistance
+### Collaborator 1 — Map panel
 
 First sprint:
 
-1. Rebuild report and help-offer flows as native Expo screens and separate their validation rules.
-2. Add explicit loading, success, retry, and duplicate-submission states.
-3. Preserve values after a failed submission.
-4. Add a local “my offers” view with withdraw and expiry controls, clearly marked as demo-only.
-5. Add privacy copy that explains approximate locations and private contact handling.
+1. Improve incident-marker selection, marker status labels, and map legend behavior.
+2. Add category and status filters with a useful empty state.
+3. Add official-notice entry points and links to relevant safety guides.
+4. Define the OpenStreetMap renderer, tile source, attribution, and usage limits for team review.
+5. Add explicit demonstration, loading, failed, cached, and location-permission-denied states.
 
 Next after backend integration:
 
-- Replace local storage writes with API calls.
-- Add server-returned report references and retry behavior.
-- Add authenticated offer ownership and withdrawal.
-- Add secure attachment metadata only after upload handling is designed.
+- Replace the illustration with the approved OpenStreetMap renderer and tile source.
+- Request location only after a user action and round public location data before display.
+- Load official notices and approved public incidents from the API.
+- Cache the last synchronized public map state and show its age.
 
-Handoff: list form fields, validation behavior, API assumptions, and changed files.
+Handoff: state the map data source, attribution requirements, privacy decisions, UI states added, and API assumptions.
 
-### Collaborator 2 — information, guides, and preparedness
+### Collaborator 2 — Need help action
 
 First sprint:
 
-1. Rebuild guides as native Expo screens with category filtering, search empty states, and related links.
-2. Give every guide a review date and source placeholder.
+1. Make the Map-based Need help action’s idle, active, and cancellation states unambiguous.
+2. State clearly that the current flow is a demonstration and does not contact emergency services or responders.
+3. Keep location-sharing disclosure visible before activation and let the user cancel immediately.
+4. Ensure the control has an accessible label, focus behavior, and non-colour state cues.
+5. Keep local-emergency-service guidance visible throughout the flow.
+
+Next after backend integration:
+
+- Replace the demonstration state with an approved, authenticated help-request flow.
+- Add confirmed delivery status and safe retry behavior only when the delivery channel exists.
+- Define location precision, retention, consent, and cancellation behavior before sending any request.
+
+Handoff: list user-visible states, accessibility behavior, privacy decisions, API assumptions, and changed files.
+
+### Collaborator 3 — Mesh panel
+
+First sprint:
+
+1. Make online, offline, standby, discovery, relaying, and unavailable states unambiguous.
+2. Show what is queued, what has not been sent, and when the last successful synchronization occurred.
+3. Provide accessible status text and a non-animated fallback for the mesh visualization.
+4. Keep Bluetooth, peer identity, and location/privacy language explicit; do not imply a message was delivered when it is only queued.
+5. Document the proposed native transport, permissions, battery impact, and platform limitations for team review before adding a real peer-to-peer implementation.
+
+Next after the connectivity design is approved:
+
+- Integrate the approved native transport and permission flow.
+- Persist and safely retry queued actions without duplicating reports or offers.
+- Add test coverage for transport loss, relay failure, and return-to-internet synchronization.
+
+Handoff: list the states and claims shown to users, accessibility behavior, privacy decisions, transport assumptions, and changed files.
+
+### Collaborator 4 — Help panel
+
+First sprint:
+
+1. Add useful feed filtering, empty, loading, stale, and offline states for neighbour requests and offers.
+2. Add availability, capacity, expiry, and clear offer-status states.
+3. Add a local “my offers” list with edit and withdraw actions, clearly marked as demonstration-only.
+4. Add publish loading, success, retry, and duplicate-submission protection.
+5. Make private contact handling explicit and keep it outside public listing data.
+6. Keep medical-help language limited to actual verified qualifications.
+
+Next after authentication and backend integration:
+
+- Add authenticated offer ownership, editing, and withdrawal.
+- Persist offers through the API with expiration and moderation states.
+- Add safe private contact-request handling without exposing contact details publicly.
+
+Handoff: list feed and offer states, privacy decisions, API assumptions, and changed files.
+
+### Collaborator 5 — Guides panel
+
+First sprint:
+
+1. Improve guide search, category filtering, related guides, and empty states.
+2. Add review dates, source placeholders, and guidance governance metadata.
 3. Add a configurable emergency-contacts panel that does not assume one country’s emergency number.
-4. Keep checklist progress local and explain that limitation in the UI.
-5. Review all guide copy for plain language and clear warnings.
+4. Persist checklist progress locally and state that limitation clearly.
+5. Review guide language for clarity, general-safety framing, and official-instructions priority.
 
 Next after content governance exists:
 
 - Load published guides from the API.
-- Add language support, revision history, reviewer identity, and official source links.
-- Add region-specific contacts from configuration.
+- Add language support, revision history, reviewer identity, source links, and regional contact configuration.
 
-Handoff: list changed guide content, sources still needed, and any claims that need official review.
-
-### Collaborator 3 — authority operations
-
-First sprint:
-
-1. Replace prompt-based report review with an accessible detail panel or page.
-2. Add confirmation dialogs for verify, reject, status changes, and notice withdrawal.
-3. Add internal-note fields that are visibly internal and never render in public views.
-4. Improve empty, loading, and error states for each dashboard section.
-5. Keep resource assignment as a demo workflow until a dispatch integration exists.
-
-Next after authentication and backend integration:
-
-- Enforce roles on the server.
-- Persist review decisions, notes, notices, and audit events.
-- Add notices preview/publish/withdraw status handling.
-- Add unit availability and assignment history.
-
-Handoff: list authority actions added, confirmation behavior, server authorization requirements, and public/private boundaries.
-
-### Collaborator 4 — maps, platform foundation, and integration
-
-First sprint:
-
-1. Scaffold the Expo mobile application after the team accepts the package and app-navigation proposal.
-2. Create the initial API-contract proposal and public/private field rules for team review.
-3. Evaluate an OpenStreetMap renderer and tile-service approach, including attribution and expected usage limits.
-4. Define approximate-location handling before any public marker is introduced.
-5. Prepare a native map component boundary that can replace the current demonstration map without changing report or dashboard workflows.
-
-Next after team agreement:
-
-- Integrate the chosen React Native OpenStreetMap renderer and approved tile provider.
-- Add location permission, loading, error, cached, and offline states.
-- Connect shared models to backend endpoints and keep the public map restricted to approved, approximate data.
-
-Handoff: state the renderer and tile-source recommendation, attribution requirements, privacy decisions, API assumptions, and integration risks.
+Handoff: list changed guide content, sources still needed, configuration assumptions, and changes made.
 
 ## Phase 2 — integration checkpoint
 
 The team integrates work only after the shared model is agreed. Verify this journey end to end:
 
-1. A public report is submitted and receives a reference.
-2. It enters the authority review queue as `Awaiting review`.
-3. An authority user changes its review state.
-4. The public map and incident detail reflect only approved public information.
-5. An authority user publishes an official notice.
-6. The public map presents that notice as official, distinct from community reports.
+1. A public incident is available with an appropriate review state.
+2. An authority user changes its review state.
+3. The public map and incident detail reflect only approved public information.
+4. An authority user publishes an official notice.
+5. The public map presents that notice as official, distinct from community reports.
 
 Add a similar test path for a help offer: create, browse approximate information, withdraw, and ensure private contact details remain unavailable publicly.
+
+The authority dashboard is a shared integration workstream after these five panels use the agreed incident, help-offer, notice, audit-event, and connectivity contracts. Build its incident review, official notices, internal notes, resource workflow, and audit history without assigning public-panel work to it.
 
 ## Phase 3 — map, connectivity, and notifications
 
@@ -171,11 +188,12 @@ Do this only after location privacy rules are agreed.
 
 | Priority | Owner | Deliverable |
 |---|---|---|
-| P0 | Collaborator 1 | Native Expo report and offer flows, validation, submission states, local offer management |
-| P0 | Collaborator 2 | Native Expo guide flows, guide metadata, contacts configuration, search and checklist polish |
-| P0 | Collaborator 3 | Accessible incident review panel, confirmations, internal notes UI |
-| P0 | Collaborator 4 | Expo foundation proposal, API contract, OpenStreetMap integration decision, location-privacy plan |
-| P1 | Collaborator 4 with team review | Expo scaffold, backend scaffold, authentication approach, basic test command |
+| P0 | Collaborator 1 | Map-panel filters, incident states, official notices, OpenStreetMap decision, location-privacy plan |
+| P0 | Collaborator 2 | Map-based Need help action states, cancellation, accessibility, and location-privacy disclosure |
+| P0 | Collaborator 3 | Mesh-panel state clarity, queued-action visibility, accessibility fallback, and transport/privacy proposal |
+| P0 | Collaborator 4 | Help-panel feed states plus offer availability, capacity, management, withdrawal, and privacy states |
+| P0 | Collaborator 5 | Guides-panel metadata, contacts configuration, search, related guides, and checklist polish |
+| P1 | Team | API contract, backend scaffold, authentication approach, and basic test command |
 | P1 | Team | Integrate report-to-dashboard demo journey using the agreed record model |
 
 Do not begin live dispatch, real-time alert claims, or public contact exchange until the required backend, moderation, security, and operational ownership exist.

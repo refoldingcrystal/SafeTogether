@@ -8,18 +8,48 @@
 4. Ask contributors to inspect `git status --short` before editing and preserve any changes they find.
 5. Assign one feature outcome to each person. Ask them to post their ownership and expected touchpoints before they begin.
 
+## Run the native app on a phone
+
+The public mobile app is an Expo project in `mobile/`. Each collaborator should install [Expo Go](https://expo.dev/go) on their iOS or Android phone, then install the project dependencies once and start Expo:
+
+```sh
+cd mobile
+npm install
+npx expo start
+```
+
+Keep the phone and development computer on the same Wi-Fi network. When Expo displays its QR code, scan it with Expo Go on Android, or with the iPhone Camera app and then choose Expo Go. The development server must remain running while testing; saved changes normally refresh on the phone automatically.
+
+If the QR code opens but the app cannot connect, confirm that both devices are on the same non-guest network and that the computer firewall permits local-network connections. As a fallback for a network that prevents device-to-device traffic, start Expo with a tunnel (this needs internet access):
+
+```sh
+npx expo start --tunnel
+```
+
+For an Android phone connected by USB, enable USB debugging and use:
+
+```sh
+adb reverse tcp:8081 tcp:8081
+adb shell am start -a android.intent.action.VIEW -d 'exp://127.0.0.1:8081'
+```
+
+Expo Go is suitable for the current project. If a future change adds a native module that Expo Go does not include, the team will need an Expo development build instead; record that requirement in the change handoff.
+
 ## Suggested feature workstreams
 
 | Collaborator | Feature outcome | First focus | Likely touchpoints |
 |---|---|---|---|
-| Collaborator 1 | Emergency reports and community help | Native report and offer workflows, submission quality, retry states, offer management, privacy language | Expo public-app forms and shared incident/offer data |
-| Collaborator 2 | Information, guides, and preparedness | Native guides, search, guide quality, contacts, checklist, content governance | Expo guides feature, guide data, future content API |
-| Collaborator 3 | Authority operations | Incident review, notices, internal notes, resource workflow, audit history | Authority dashboard and shared incident/notice data |
-| Collaborator 4 | Mobile maps, platform foundation, and integration | Expo mobile foundation, OpenStreetMap research and implementation plan, shared contracts, backend/API groundwork, app integration | Mobile navigation, map, API contracts, test and deployment setup |
+| Collaborator 1 | Map panel | Demonstration map, incident markers, official notices, filters, connectivity states, and OpenStreetMap integration | `mobile/src/app/(tabs)/index.tsx`, map components, shared incident and notice data |
+| Collaborator 2 | Need help action | Map-based request state, clear confirmation, location-sharing disclosure, cancellation, and accessibility | `mobile/src/app/(tabs)/index.tsx`, `mobile/src/components/ui.tsx`, shared app state |
+| Collaborator 3 | Mesh panel | Offline and peer-to-peer status, connection states, queued-action visibility, graceful fallbacks, and privacy messaging | `mobile/src/app/(tabs)/mesh.tsx`, `mobile/src/components/MeshCompose.tsx`, `mobile/src/components/MeshFinder.tsx`, shared connectivity state |
+| Collaborator 4 | Help panel | Neighbour help feed, requests, offer discovery, empty/offline states, and the offer-help flow | `mobile/src/app/(tabs)/feed.tsx`, `mobile/src/app/(tabs)/offer.tsx`, shared help-offer data |
+| Collaborator 5 | Guides panel | Guide search, detail screens, checklist, emergency contacts, source metadata, and content governance | `mobile/src/app/(tabs)/guides.tsx`, `mobile/src/app/guide/`, shared guide data |
 
 The prototype is split into feature modules. These workstreams describe outcomes rather than exclusive files: contributors should make the smallest necessary changes across the app, coordinate shared-data changes in advance, and avoid concurrent edits to the same file.
 
-Expo / React Native is the public-app stack. OpenStreetMap is the intended future map-data direction. The maps workstream should document the selected React Native renderer, tile source, attribution, usage limits, and location-privacy approach before replacing the demonstration map.
+All four tab panels are present and render on Android: Map, Mesh, Help, and Guides. The Need help action is on Map and is owned by collaborator 2; the Offer Help screen is reached from Help and is owned by the Help workstream. The browser prototype remains useful as a reference, but panel work should begin in `mobile/src/app/`.
+
+Expo / React Native is the public-app stack. OpenStreetMap is the intended future map-data direction. The Map-panel workstream should document the selected React Native renderer, tile source, attribution, usage limits, and location-privacy approach before replacing the demonstration map.
 
 ## Coordination rules
 
@@ -32,15 +62,18 @@ Expo / React Native is the public-app stack. OpenStreetMap is the intended futur
 
 ## Before handing work back
 
-Run the module syntax check and whitespace check:
+Run the mobile type, lint, and whitespace checks:
 
 ```sh
-for file in src/app.js src/shared/*.js src/public/*.js src/authority/*.js; do node --input-type=module --check < "$file" || exit 1; done
+cd mobile
+npx tsc --noEmit
+npx expo lint
+cd ..
 git diff --check
 ```
 
-There are currently no package scripts, build command, lint configuration, or automated test suite. In the handoff, list changed files, interactions completed, checks run, and any backend or integration gaps. The prototype is local-only: reports, offers, notices, and checklist progress are saved in the current browser's local storage and are not shared with other users.
+The browser prototype remains local-only. The Expo mobile app currently uses demonstration data and local component state; reports, offers, notices, and checklist progress are not yet synchronized across devices. In the handoff, list changed files, interactions completed, checks run, and backend or integration gaps.
 
 ## Copyable kickoff message
 
-> We’re building SafeTogether as an Expo / React Native public mobile app plus an authority web dashboard. Please read `README.md`, `docs/collaboration.md`, `docs/implementation-plan.md`, and `docs/mobile-app.md`; run the current browser prototype locally; then claim one feature workstream and its user journey in the team channel before editing. Use your own branch or isolated worktree. Coordinate shared API, map, and data-privacy changes before making them. Keep changes focused, preserve existing work, run the listed checks, and send back your branch/diff with changed files and known limitations. OpenStreetMap is our future map direction; do not replace the demonstration map until renderer, attribution, tile source, and location privacy are agreed.
+> We’re building SafeTogether as an Expo / React Native public mobile app plus an authority web dashboard. Please read `README.md`, `docs/collaboration.md`, `docs/implementation-plan.md`, and `docs/mobile-app.md`; run the native mobile app; then claim Map, Need help, Mesh, Help, or Guides and its user journey in the team channel before editing. Need help is a Map action; the Offer Help screen belongs to Help. Use your own branch or isolated worktree. Coordinate shared API, connectivity, map, and data-privacy changes before making them. Keep changes focused, preserve existing work, run the listed checks, and send back your branch/diff with changed files and known limitations. OpenStreetMap is our future map direction; do not replace the demonstration map until renderer, attribution, tile source, and location privacy are agreed.

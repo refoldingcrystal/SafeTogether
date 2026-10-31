@@ -41,6 +41,8 @@ python3 -m http.server 4173
 
 The current prototype has no package manager, build step, backend, or configured test suite. Reports, offers, notices, and checklist selections are stored in browser local storage on the current device. The React Native app has not been scaffolded yet, so it cannot currently be run on a phone as an installed mobile app.
 
+An initial REST API is available in `backend/`. See [backend/README.md](backend/README.md) for startup, endpoints, and development limitations. The browser prototype and Expo screens still use demonstration/local state; connecting those clients to the API is a separate integration step.
+
 For collaborator onboarding and file ownership, see [docs/collaboration.md](docs/collaboration.md).
 For the suggested feature roadmap and workstream plan, see [docs/implementation-plan.md](docs/implementation-plan.md).
 For the planned Expo / React Native architecture, see [docs/mobile-app.md](docs/mobile-app.md).

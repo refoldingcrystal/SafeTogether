@@ -1,3 +1,5 @@
+import { useEffect } from 'react';
+import { router } from 'expo-router';
 import { Tabs } from 'expo-router/js-tabs';
 import { Ionicons } from '@expo/vector-icons';
 import type { IconName } from '@/icons';
@@ -11,7 +13,13 @@ function tabIcon(name: IconName) {
 }
 
 export default function TabLayout() {
-  const { offline } = useApp();
+  const { offline, meshStatus } = useApp();
+
+  // Losing the internet makes the mesh the only way out, so bring it to the front.
+  useEffect(() => {
+    if (offline) router.navigate('/mesh');
+  }, [offline]);
+
   return (
     <Tabs
       screenOptions={{
@@ -24,17 +32,16 @@ export default function TabLayout() {
       }}
     >
       <Tabs.Screen name="index" options={{ title: 'Map', tabBarIcon: tabIcon('map') }} />
-      <Tabs.Screen name="report" options={{ title: 'Report', tabBarIcon: tabIcon('alert-circle') }} />
       <Tabs.Screen
         name="mesh"
         options={{
           title: 'Mesh',
-          tabBarBadge: offline ? 'ON' : undefined,
+          tabBarBadge: meshStatus === 'discovering' || meshStatus === 'relaying' ? 'ON' : undefined,
           tabBarBadgeStyle: { backgroundColor: colors.mesh, fontSize: 9 },
           tabBarIcon: tabIcon('radio'),
         }}
       />
-      <Tabs.Screen name="feed" options={{ title: 'Help', tabBarIcon: tabIcon('people') }} />
+      <Tabs.Screen name="offerhelp" options={{ title: 'Help', tabBarIcon: tabIcon('people') }} />
       <Tabs.Screen name="guides" options={{ title: 'Guides', tabBarIcon: tabIcon('book') }} />
       <Tabs.Screen name="offer" options={{ href: null }} />
     </Tabs>

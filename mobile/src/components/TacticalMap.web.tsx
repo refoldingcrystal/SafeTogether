@@ -1,7 +1,7 @@
 import 'leaflet/dist/leaflet.css';
 import './map.css';
-import { useEffect } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { useEffect, useState } from 'react';
+import { StyleSheet, Text, View } from 'react-native';
 import L from 'leaflet';
 import { Circle, MapContainer, Marker, Polyline, TileLayer, useMap } from 'react-leaflet';
 import mock from '@/data/mock.json';
@@ -27,6 +27,8 @@ const GLYPHS: Record<string, string> = {
 };
 const DEFAULT_GLYPH = '<path d="M11 4h2v10h-2zM11 17h2v2h-2z"/>';
 const precisionRadius = { district: 450, neighborhood: 320, landmark: 200 } as const;
+const tileUrl = process.env.EXPO_PUBLIC_MAP_TILE_URL?.trim() || '';
+const tileAttribution = process.env.EXPO_PUBLIC_MAP_TILE_ATTRIBUTION?.trim() || '';
 
 // Deterministic "people nearby" scattered around the user.
 const nearby = Array.from({ length: 16 }, (_, i) => ({
@@ -57,17 +59,24 @@ function Camera({ shelling, sos, route, incidents, selectedId }: TacticalMapProp
 }
 
 export function TacticalMap(props: TacticalMapProps) {
+  const [tileUnavailable, setTileUnavailable] = useState(false);
   const { shelling, sos, route, showBasement, incidents, selectedId, onSelect, dangerZones = [], emergencySites = [], plannedRoute, onSelectDanger, onSelectSite } = props;
 
   return (
     <View style={styles.root}>
       <MapContainer bounds={START_BOUNDS} boundsOptions={{ padding: [30, 30] }} zoomControl={false} style={{ width: '100%', height: '100%' }}>
-        <TileLayer
-          className="osm-light"
-          url="https://tile.openstreetmap.org/{z}/{x}/{y}.png"
-          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-          maxZoom={19}
-        />
+        {tileUrl && !tileUnavailable && (
+          <TileLayer
+            className="osm-light"
+            url={tileUrl}
+            attribution={tileAttribution}
+            maxZoom={16}
+            updateWhenIdle
+            updateWhenZooming={false}
+            keepBuffer={1}
+            eventHandlers={{ tileerror: () => setTileUnavailable(true) }}
+          />
+        )}
         <Camera {...props} />
 
         {incidents.map((incident) => {
@@ -154,6 +163,8 @@ export function TacticalMap(props: TacticalMapProps) {
           )}
         />
       </MapContainer>
+      {!tileUrl && <View pointerEvents="none" style={styles.tileNotice}><Text style={styles.tileNoticeText}>Basemap provider not configured · demonstration overlays only</Text></View>}
+      {tileUrl && tileUnavailable && <View pointerEvents="none" style={styles.tileNotice}><Text style={styles.tileNoticeText}>Basemap unavailable · demonstration overlays only</Text></View>}
     </View>
   );
 }
@@ -186,4 +197,6 @@ function RouteLine({ points }: { points: LatLng[] }) {
 
 const styles = StyleSheet.create({
   root: { ...StyleSheet.absoluteFill, zIndex: 0 },
+  tileNotice: { position: 'absolute', top: 10, left: 10, right: 10, alignItems: 'center' },
+  tileNoticeText: { backgroundColor: '#FFFFFFE6', borderRadius: 8, color: colors.textMuted, fontSize: 11, fontWeight: '700', paddingHorizontal: 10, paddingVertical: 6, textAlign: 'center' },
 });

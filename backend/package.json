@@ -1,0 +1,8 @@
+{
+  "name": "safetogether-api",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": { "start": "node src/server.js", "dev": "node --watch src/server.js" },
+  "engines": { "node": ">=20" }
+}
