@@ -5,9 +5,10 @@ import { router, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
 import { TacticalMap } from '@/components/TacticalMap';
+import { CoordinationChat, type CoordinationRequest } from '@/components/CoordinationChat';
 import { Button, Card, NeedHelpButton } from '@/components/ui';
 import mock from '@/data/mock.json';
-import { categoryIcons, incidentColors, incidentGuide } from '@/icons';
+import { categoryIcons, incidentColors } from '@/icons';
 import { demonstrationDangerZones, demonstrationHelpOffers, demonstrationIncidents, emergencySites, nearbyPeople, type Coordinate, type DangerZone, type EmergencySite, type MapHelpOffer } from '@/shared/demo';
 import { api, type MapSnapshot } from '@/services/api';
 import type { Incident, PersonalHelpCategory } from '@/shared/models';
@@ -93,6 +94,8 @@ export default function MapScreen() {
     void loadMapLocation();
     return () => { active = false; };
   }, []);
+
+  const [activeChat, setActiveChat] = useState<CoordinationRequest | null>(null);
 
   const incidents = allIncidents;
   const nearestSafe = useMemo(() => nearestSafeSite(sites, mapLocation), [mapLocation, sites]);
@@ -242,6 +245,7 @@ export default function MapScreen() {
             setRouteError(null);
             setCustomDestination(null);
           }}
+        onChat={(incident) => setActiveChat({ id: incident.id, author: incident.reporterName, title: incident.category })}
           onClose={() => {
             setSelectedId(null);
             setSelectedDangerId(null);
@@ -249,6 +253,7 @@ export default function MapScreen() {
           }}
         />
       </View>
+      <CoordinationChat request={activeChat} onClose={() => setActiveChat(null)} />
       {helpMenuOpen && (
         <View style={styles.helpPage}>
           <ScrollView contentContainerStyle={styles.helpContent}>
@@ -318,6 +323,7 @@ function BottomCard({
   onPlanNearest,
   onPlanSite,
   onCloseRoute,
+  onChat,
   onClose,
 }: {
   selectedIncident?: Incident;
@@ -330,6 +336,7 @@ function BottomCard({
   onPlanNearest: () => void;
   onPlanSite: (site: EmergencySite) => void;
   onCloseRoute: () => void;
+  onChat: (incident: Incident) => void;
   onClose: () => void;
 }) {
   const app = useApp();
@@ -439,7 +446,6 @@ function BottomCard({
 
   if (incident) {
     const color = incidentColors[incident.category] ?? colors.blue;
-    const guide = incidentGuide[incident.category];
     return (
       <Animated.View entering={FadeInDown} key={incident.id}>
         <Card>
@@ -461,7 +467,7 @@ function BottomCard({
             <Info icon="time" text={formatIncidentTime(incident.submittedAt)} />
           </View>
           {incident.source === 'authority' && <Text style={styles.muted}>Submitted by an authority</Text>}
-          {guide && <Button icon="book" label="Open safety guide" color={colors.blue} outline onPress={() => router.push(`/guide/${guide}`)} />}
+          <Button icon="chatbubble-ellipses" label="Chat" color={colors.blue} onPress={() => onChat(incident)} />
         </Card>
       </Animated.View>
     );

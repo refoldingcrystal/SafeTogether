@@ -270,16 +270,24 @@ async function route(req, res) {
     return send(res, 200, { data: publicHelpRequest(row, user.id) });
   }
   if (resource === 'help-requests' && method === 'GET' && recordId && parts[3] === 'messages') {
-    const row = db.helpRequests.find((item) => item.id === recordId); if (!row) throw fail(404, 'Help request not found');
-    if (!row.participants?.includes(user.id) && row.requesterId !== user.id && user.role !== 'authority') throw fail(403, 'Join the conversation by sending a message first');
+    const request = db.helpRequests.find((item) => item.id === recordId);
+    const incident = db.incidents.find((item) => item.id === recordId && isPersonalHelpIncident(item) && item.status !== 'rejected');
+    const row = request || incident; if (!row) throw fail(404, 'Help request not found');
+    if (!row.participants?.includes(user.id) && row.requesterId !== user.id && row.reporterId !== user.id && user.role !== 'authority') {
+      if (request) throw fail(403, 'Join the conversation by sending a message first');
+      return send(res, 200, { data: [] });
+    }
     return send(res, 200, { data: db.messages.filter((message) => message.requestId === row.id).map((message) => ({ ...message, isMine: message.senderId === user.id, sentAt: message.createdAt })) });
   }
   if (resource === 'help-requests' && method === 'POST' && recordId && parts[3] === 'messages') {
-    const row = db.helpRequests.find((item) => item.id === recordId); if (!row || row.status !== 'active') throw fail(404, 'Active help request not found');
+    const request = db.helpRequests.find((item) => item.id === recordId && item.status === 'active');
+    const incident = db.incidents.find((item) => item.id === recordId && isPersonalHelpIncident(item) && item.status !== 'rejected');
+    const row = request || incident; if (!row) throw fail(404, 'Active help request not found');
     const body = await readBody(req); const text = clean(body.text, 1000); if (!text) throw fail(400, 'Message text is required');
-    if (row.participants && !row.participants.includes(user.id)) row.participants.push(user.id);
+    if (!row.participants) row.participants = row.requesterId || row.reporterId ? [row.requesterId || row.reporterId] : [];
+    if (!row.participants.includes(user.id)) row.participants.push(user.id);
     const message = { id: id('msg'), requestId: row.id, senderId: user.id, senderName: user.name, text, createdAt: now() };
-    db.messages.push(message); row.updatedAt = now(); audit(user.id, 'help_message_sent', 'help_request', row.id); await persist();
+    db.messages.push(message); row.updatedAt = now(); audit(user.id, 'help_message_sent', incident ? 'incident' : 'help_request', row.id); await persist();
     return send(res, 201, { data: { ...message, isMine: true, sentAt: message.createdAt } });
   }
 
