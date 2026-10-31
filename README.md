@@ -15,6 +15,8 @@ A mobile-first emergency map that helps people understand nearby risks, find sup
 
 </div>
 
+![](SafeTogether.png)
+
 ---
 
 ## The problem
