@@ -227,7 +227,7 @@ export function TacticalMap({
           groupedKeys.has(`request:${request.id}`) ? null :
           <Marker key={request.id} coordinate={request.coordinate} zIndex={36} tracksViewChanges={false} onPress={() => onSelectHelpRequest?.(request.id)}>
             <View style={[styles.offerMarker, styles.requestMarker]}>
-              <Ionicons name="hand-left" size={15} color="#fff" />
+              <Ionicons name="alert-circle" size={16} color="#fff" />
               <Text style={styles.offerMarkerLabel}>NEED</Text>
             </View>
           </Marker>
