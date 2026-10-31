@@ -14,11 +14,12 @@ import { colors, radius, shadow } from '@/theme';
 
 type HelpKind = 'Emergency' | 'Report an event' | 'Request resources';
 type LocationState = 'idle' | 'locating' | 'ready' | 'unavailable';
+type LocationMode = 'automatic' | 'manual';
 
-const helpKinds: { title: HelpKind; detail: string; icon: keyof typeof Ionicons.glyphMap }[] = [
-  { title: 'Emergency', detail: 'I need urgent help now', icon: 'medkit-outline' },
-  { title: 'Report an event', detail: 'I saw something that needs attention', icon: 'alert-circle-outline' },
-  { title: 'Request resources', detail: 'I need supplies, transport, or shelter', icon: 'cube-outline' },
+const helpKinds: { title: HelpKind; detail: string; icon: keyof typeof Ionicons.glyphMap; examples: string[] }[] = [
+  { title: 'Emergency', detail: 'For example: medical emergency, fire, or trapped person', icon: 'medkit-outline', examples: ['Medical emergency', 'Fire', 'Trapped person'] },
+  { title: 'Report an event', detail: 'For example: flooding, road blockage, or damage', icon: 'alert-circle-outline', examples: ['Flooding', 'Road blockage', 'Infrastructure damage'] },
+  { title: 'Request resources', detail: 'For example: water, shelter, or transport', icon: 'cube-outline', examples: ['Food or water', 'Shelter', 'Transport'] },
 ];
 
 export default function MapScreen() {
@@ -26,12 +27,20 @@ export default function MapScreen() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [helpMenuOpen, setHelpMenuOpen] = useState(false);
   const [helpKind, setHelpKind] = useState<HelpKind | null>(null);
+  const [requestExample, setRequestExample] = useState('');
+  const [customRequest, setCustomRequest] = useState(false);
   const [details, setDetails] = useState('');
   const [location, setLocation] = useState('');
   const [locationState, setLocationState] = useState<LocationState>('idle');
+  const [locationMode, setLocationMode] = useState<LocationMode>('automatic');
 
   async function openHelpMenu() {
     setHelpMenuOpen(true);
+    setLocationMode('automatic');
+    void findCurrentLocation();
+  }
+
+  async function findCurrentLocation() {
     setLocationState('locating');
     try {
       const permission = await Location.requestForegroundPermissionsAsync();
@@ -45,6 +54,12 @@ export default function MapScreen() {
     } catch {
       setLocationState('unavailable');
     }
+  }
+
+  function chooseKind(kind: HelpKind) {
+    setHelpKind(kind);
+    setRequestExample('');
+    setCustomRequest(false);
   }
 
   function submitHelpRequest() {
@@ -104,7 +119,7 @@ export default function MapScreen() {
             <NeedHelpButton onPress={openHelpMenu} />
           </View>
         )}
-        <BottomCard selectedId={selectedId} onClose={() => setSelectedId(null)} helpKind={helpKind} location={location} details={details} />
+        <BottomCard selectedId={selectedId} onClose={() => setSelectedId(null)} helpKind={helpKind} requestExample={requestExample} location={location} details={details} />
       </View>
       {helpMenuOpen && (
         <View style={styles.sheetBackdrop}>
@@ -120,7 +135,7 @@ export default function MapScreen() {
                 </Pressable>
               </View>
               {helpKinds.map((option) => (
-                <Pressable key={option.title} onPress={() => setHelpKind(option.title)} accessibilityRole="radio" accessibilityState={{ selected: helpKind === option.title }} style={[styles.helpOption, helpKind === option.title && styles.helpOptionSelected]}>
+                <Pressable key={option.title} onPress={() => chooseKind(option.title)} accessibilityRole="radio" accessibilityState={{ selected: helpKind === option.title }} style={[styles.helpOption, helpKind === option.title && styles.helpOptionSelected]}>
                   <Ionicons name={option.icon} size={21} color={helpKind === option.title ? colors.blue : colors.textMuted} />
                   <View style={{ flex: 1 }}>
                     <Text style={styles.optionTitle}>{option.title}</Text>
@@ -129,9 +144,32 @@ export default function MapScreen() {
                   {helpKind === option.title && <Ionicons name="checkmark-circle" size={20} color={colors.blue} />}
                 </Pressable>
               ))}
+              {helpKind && (
+                <>
+                  <Text style={styles.kicker}>QUICK CHOICES</Text>
+                  <View style={styles.quickChoices}>
+                    {helpKinds.find((option) => option.title === helpKind)?.examples.map((example) => (
+                      <Pressable key={example} onPress={() => { setRequestExample(example); setCustomRequest(false); }} style={[styles.quickChoice, requestExample === example && styles.quickChoiceSelected]}>
+                        <Text style={[styles.quickChoiceText, requestExample === example && { color: colors.blue }]}>{example}</Text>
+                      </Pressable>
+                    ))}
+                    <Pressable onPress={() => { setRequestExample(''); setCustomRequest(true); }} style={[styles.quickChoice, customRequest && styles.quickChoiceSelected]}>
+                      <Text style={[styles.quickChoiceText, customRequest && { color: colors.blue }]}>Other</Text>
+                    </Pressable>
+                  </View>
+                  {customRequest && <TextInput value={requestExample} onChangeText={setRequestExample} placeholder="Describe the kind of help you need" placeholderTextColor={colors.textDim} style={styles.input} accessibilityLabel="Other help request" />}
+                </>
+              )}
               <Text style={styles.kicker}>YOUR APPROXIMATE LOCATION</Text>
-              <TextInput value={location} onChangeText={setLocation} placeholder={locationState === 'locating' ? 'Finding your location…' : 'Neighbourhood or nearby landmark'} placeholderTextColor={colors.textDim} style={styles.input} editable={locationState !== 'locating'} accessibilityLabel="Approximate location" />
-              <Text style={styles.locationNote}>{locationState === 'ready' ? 'Location added automatically and rounded for privacy. You can edit it.' : 'Location is optional. You can add a nearby landmark instead.'}</Text>
+              <View style={styles.locationChoices}>
+                <Button icon="locate" label="Use current location" color={colors.blue} outline onPress={() => { setLocationMode('automatic'); void findCurrentLocation(); }} disabled={locationState === 'locating'} />
+                <Button label="Enter manually" color={colors.textMuted} outline onPress={() => setLocationMode('manual')} />
+              </View>
+              {locationMode === 'manual' ? (
+                <TextInput value={location} onChangeText={setLocation} placeholder="Neighbourhood or nearby landmark" placeholderTextColor={colors.textDim} style={styles.input} accessibilityLabel="Approximate location" />
+              ) : (
+                <Text style={styles.locationNote}>{locationState === 'locating' ? 'Finding your approximate location…' : locationState === 'ready' ? `Using ${location}.` : 'Current location is unavailable. You can enter a landmark manually.'}</Text>
+              )}
               <Text style={styles.kicker}>ADDITIONAL DETAILS (OPTIONAL)</Text>
               <TextInput value={details} onChangeText={setDetails} placeholder="What happened or what do you need?" placeholderTextColor={colors.textDim} style={[styles.input, styles.detailsInput]} multiline maxLength={400} textAlignVertical="top" accessibilityLabel="Additional details" />
               <Text style={styles.disclaimer}>This demonstration does not contact emergency services or send your request to other people.</Text>
@@ -144,7 +182,7 @@ export default function MapScreen() {
   );
 }
 
-function BottomCard({ selectedId, onClose, helpKind, location, details }: { selectedId: string | null; onClose: () => void; helpKind: HelpKind | null; location: string; details: string }) {
+function BottomCard({ selectedId, onClose, helpKind, requestExample, location, details }: { selectedId: string | null; onClose: () => void; helpKind: HelpKind | null; requestExample: string; location: string; details: string }) {
   const app = useApp();
   const incident = demonstrationIncidents.find((i) => i.id === selectedId);
 
@@ -175,6 +213,7 @@ function BottomCard({ selectedId, onClose, helpKind, location, details }: { sele
             </View>
             <View style={{ flex: 1 }}>
               <Text style={styles.title}>{helpKind ?? 'Help'} request active</Text>
+              {!!requestExample.trim() && <Text style={styles.muted}>Request: {requestExample.trim()}</Text>}
               <Text style={styles.muted}>{location ? `${location} · ` : ''}This is a demonstration and has not contacted responders or other people.</Text>
               {!!details.trim() && <Text style={styles.muted}>Details: {details.trim()}</Text>}
             </View>
@@ -289,17 +328,22 @@ const styles = StyleSheet.create({
   alertTitle: { color: '#fff', fontWeight: '900', fontSize: 13 },
   alertText: { color: '#fff', fontSize: 12, marginTop: 2 },
   bottom: { position: 'absolute', left: 0, right: 0, bottom: 0, padding: 12 },
-  sosRow: { alignItems: 'flex-end', marginBottom: 4 },
+  sosRow: { alignItems: 'center', marginBottom: 4 },
   sheetBackdrop: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, justifyContent: 'flex-end', backgroundColor: '#10182888', padding: 12 },
   sheet: { maxHeight: '88%' },
   sheetHeader: { flexDirection: 'row', gap: 12, alignItems: 'flex-start' },
   helpOption: { flexDirection: 'row', alignItems: 'center', gap: 12, borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, padding: 12 },
   helpOptionSelected: { borderColor: colors.blue, backgroundColor: colors.blueSoft },
+  quickChoices: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  quickChoice: { borderWidth: 1, borderColor: colors.border, borderRadius: radius.pill, paddingHorizontal: 12, paddingVertical: 8 },
+  quickChoiceSelected: { borderColor: colors.blue, backgroundColor: colors.blueSoft },
+  quickChoiceText: { color: colors.textMuted, fontSize: 12, fontWeight: '700' },
   optionTitle: { color: colors.text, fontSize: 15, fontWeight: '800' },
   optionDetail: { color: colors.textMuted, fontSize: 12, marginTop: 2 },
   input: { minHeight: 46, borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, backgroundColor: colors.bg, color: colors.text, paddingHorizontal: 12, paddingVertical: 10, fontSize: 15 },
   detailsInput: { minHeight: 92 },
   locationNote: { color: colors.textMuted, fontSize: 12, lineHeight: 17 },
+  locationChoices: { flexDirection: 'row', gap: 8 },
   disclaimer: { color: colors.orange, backgroundColor: colors.orangeSoft, borderRadius: radius.md, padding: 10, fontSize: 12, fontWeight: '600', lineHeight: 17 },
   kicker: { fontSize: 11, fontWeight: '800', letterSpacing: 0.8, color: colors.textDim },
   title: { fontSize: 18, fontWeight: '800', color: colors.text },

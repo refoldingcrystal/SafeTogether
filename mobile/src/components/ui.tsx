@@ -61,11 +61,7 @@ export function Card({ children, style }: { children: ReactNode; style?: object 
 export function NeedHelpButton({ onPress }: { onPress: () => void }) {
   return (
     <Pressable onPress={onPress} accessibilityRole="button" accessibilityLabel="Need help" style={({ pressed }) => [styles.needHelpButton, pressed && { opacity: 0.8 }]}>
-      <Ionicons name="heart-outline" size={18} color={colors.blue} />
-      <View>
-        <Text style={styles.needHelpTitle}>Need help?</Text>
-        <Text style={styles.needHelpSubtitle}>Choose a request</Text>
-      </View>
+      <Text style={styles.needHelpTitle}>Need help</Text>
     </Pressable>
   );
 }
@@ -198,9 +194,8 @@ const styles = StyleSheet.create({
   },
   buttonText: { fontSize: 15, fontWeight: '700' },
   card: { backgroundColor: colors.card, borderRadius: radius.lg, padding: 16, gap: 10, ...shadow },
-  needHelpButton: { flexDirection: 'row', alignItems: 'center', gap: 9, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.blueSoft, paddingHorizontal: 14, paddingVertical: 10, borderRadius: radius.lg, ...shadow },
+  needHelpButton: { alignItems: 'center', backgroundColor: colors.card, borderWidth: 1, borderColor: colors.blueSoft, paddingHorizontal: 20, paddingVertical: 12, borderRadius: radius.lg, ...shadow },
   needHelpTitle: { color: colors.text, fontSize: 15, fontWeight: '800' },
-  needHelpSubtitle: { color: colors.textMuted, fontSize: 11, fontWeight: '600', marginTop: 1 },
   status: {
     height: 30,
     flexDirection: 'row',
