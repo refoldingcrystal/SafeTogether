@@ -5,7 +5,7 @@ import MapView, { Circle, Marker, Polyline, UrlTile } from 'react-native-maps';
 import mock from '@/data/mock.json';
 import { categoryIcons, incidentColors } from '@/icons';
 import type { Incident } from '@/shared/models';
-import type { Coordinate, DangerZone, EmergencySite } from '@/shared/demo';
+import type { Coordinate, DangerZone, EmergencySite, MapHelpOffer } from '@/shared/demo';
 import type { Route } from '@/state/app';
 import { colors, shadow } from '@/theme';
 
@@ -17,6 +17,7 @@ export type TacticalMapProps = {
   offline?: boolean;
   dangerZones?: DangerZone[];
   emergencySites?: EmergencySite[];
+  helpOffers?: MapHelpOffer[];
   plannedRoute?: Coordinate[];
   destination?: Coordinate;
   incidents: Incident[];
@@ -52,6 +53,7 @@ export function TacticalMap({
   offline = false,
   dangerZones = [],
   emergencySites = [],
+  helpOffers = [],
   plannedRoute,
   destination,
   incidents,
@@ -157,6 +159,14 @@ export function TacticalMap({
             </View>
           </Marker>
         ))}
+        {helpOffers.map((offer) => (
+          <Marker key={offer.id} coordinate={offer.coordinate} title={`Help offered: ${offer.title}`} description={`${offer.author}${offer.description ? ` · ${offer.description}` : ''}`} zIndex={35}>
+            <View style={styles.offerMarker}>
+              <Ionicons name="hand-left" size={15} color="#fff" />
+              <Text style={styles.offerMarkerLabel}>OFFER</Text>
+            </View>
+          </Marker>
+        ))}
         {destination && (
           <Marker coordinate={destination} title="Selected destination" description="Long-press a different place to change the destination." zIndex={80}>
             <View style={styles.destinationMarker}><Ionicons name="flag" size={18} color="#fff" /></View>
@@ -205,6 +215,8 @@ const styles = StyleSheet.create({
   attributionText: { fontSize: 8, color: colors.textMuted },
   dangerMarker: { minWidth: 70, height: 36, borderRadius: 18, borderWidth: 3, borderColor: '#fff', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, paddingHorizontal: 7, ...shadow },
   emergencySiteMarker: { minWidth: 72, height: 36, borderRadius: 10, borderWidth: 3, borderColor: '#fff', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, paddingHorizontal: 7, ...shadow },
+  offerMarker: { minWidth: 64, height: 34, borderRadius: 17, borderWidth: 3, borderColor: '#fff', backgroundColor: colors.green, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, paddingHorizontal: 7, ...shadow },
+  offerMarkerLabel: { color: '#fff', fontSize: 9, fontWeight: '900', letterSpacing: 0.3 },
   destinationMarker: { width: 38, height: 38, borderRadius: 19, borderWidth: 3, borderColor: '#fff', backgroundColor: colors.text, alignItems: 'center', justifyContent: 'center', ...shadow },
   mapMarkerLabel: { color: '#fff', fontSize: 9, fontWeight: '900', letterSpacing: 0.3 },
 });

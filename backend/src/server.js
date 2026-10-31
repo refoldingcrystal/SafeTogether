@@ -146,6 +146,7 @@ function publicOffer(offer, viewerId) {
   return {
     id: offer.id, type: 'offer', categories, icon: HELP_ICONS[categories[0]] || 'hand-left', title: categories.join(' · '),
     author: displayName(offer.ownerId), distance: offer.approximateLocation?.label || 'Location not shared', tags: categories,
+    approximateLocation: offer.approximateLocation || null,
     description: offer.description || undefined, photos: (offer.attachments || []).filter((item) => item.approved).map((item) => publicAttachment(item).url),
     isMine: offer.ownerId === viewerId, status: offer.status, createdAt: offer.createdAt,
   };
