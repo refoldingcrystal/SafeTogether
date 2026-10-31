@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Alert, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { router, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -18,7 +18,7 @@ import type { Incident, PersonalHelpCategory } from '@/shared/models';
 import { getApproximateCurrentLocation } from '@/shared/location';
 import { requestSafeRoadRoute, type SafeRoute } from '@/shared/routing';
 import { useApp } from '@/state/app';
-import { colors, radius } from '@/theme';
+import { colors, radius, shadow } from '@/theme';
 
 type HelpKind = 'Emergency' | 'Request resources';
 const helpKinds: Record<HelpKind, string[]> = {
@@ -447,24 +447,38 @@ export default function MapScreen() {
         />
       </View>
       <CoordinationChat request={activeChat} onClose={() => setActiveChat(null)} />
-      {helpMenuOpen && (
-        <View style={styles.helpPage}>
-          <ScrollView contentContainerStyle={styles.helpContent}>
-            <View style={styles.helpHeader}>
-              <View style={{ flex: 1 }}><Text style={styles.title}>What kind of help do you need?</Text><Text style={styles.muted}>Choose an example or describe another request.</Text></View>
-              <Pressable onPress={() => setHelpMenuOpen(false)} accessibilityRole="button" accessibilityLabel="Close help menu"><Ionicons name="close" size={24} color={colors.textMuted} /></Pressable>
+      <Modal visible={helpMenuOpen} transparent animationType="slide" onRequestClose={() => setHelpMenuOpen(false)} statusBarTranslucent>
+        <KeyboardAvoidingView style={styles.helpModalRoot} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+          <Pressable style={styles.helpScrim} onPress={() => setHelpMenuOpen(false)} accessibilityRole="button" accessibilityLabel="Close help request form" />
+          <View style={styles.helpSheet}>
+            <View style={styles.helpModalHeader}>
+              <View style={styles.helpModalTitleWrap}>
+                <Text style={styles.helpModalTitle}>What kind of help do you need?</Text>
+                <Text style={styles.helpModalSubtitle}>Choose an example or describe another request.</Text>
+              </View>
+              <Pressable onPress={() => setHelpMenuOpen(false)} style={styles.helpCloseButton} accessibilityRole="button" accessibilityLabel="Close help menu">
+                <Ionicons name="close" size={22} color={colors.textMuted} />
+              </Pressable>
             </View>
-            {(Object.keys(helpKinds) as HelpKind[]).map((kind) => <Pressable key={kind} onPress={() => { setHelpKind(kind); setRequest(''); }} style={[styles.helpOption, helpKind === kind && styles.helpOptionActive]}><Text style={styles.optionTitle}>{kind}</Text><Text style={styles.optionDetail}>{helpKinds[kind].join(' · ')}</Text></Pressable>)}
-            {helpKind && <View style={styles.quickChoices}>{helpKinds[helpKind].map((example) => <Pressable key={example} onPress={() => setRequest(example)} style={[styles.quickChoice, request === example && styles.quickChoiceActive]}><Text style={styles.quickChoiceText}>{example}</Text></Pressable>)}</View>}
-            {helpKind && <TextInput value={request} onChangeText={setRequest} placeholder={helpKind === 'Emergency' ? 'Describe the help you need (optional)' : 'Other resource or request (optional)'} placeholderTextColor={colors.textDim} style={styles.input} />}
-            <Text style={styles.muted}>We’ll use your current location, shifted randomly by up to 500 m.</Text>
-            <Text style={styles.kicker}>ADDITIONAL DETAILS (OPTIONAL)</Text><TextInput value={details} onChangeText={setDetails} placeholder="What help do you need?" placeholderTextColor={colors.textDim} style={[styles.input, styles.detailsInput]} multiline textAlignVertical="top" />
-            <Text style={styles.disclaimer}>Your request will be shared with the SafeTogether community. Incident reports are also available to authorities. For immediate danger, call local emergency services.</Text>
-            {submitError && <Text accessibilityRole="alert" style={styles.submitError}>{submitError}</Text>}
-            <Button label={submitting ? 'Sending…' : 'Send help request'} icon="send" disabled={!helpKind || submitting} onPress={() => { void submitHelpRequest(); }} />
-          </ScrollView>
-        </View>
-      )}
+            <ScrollView keyboardShouldPersistTaps="always" contentContainerStyle={styles.helpContent}>
+              {(Object.keys(helpKinds) as HelpKind[]).map((kind) => <Pressable key={kind} onPress={() => { setHelpKind(kind); setRequest(''); }} style={[styles.helpOption, helpKind === kind && styles.helpOptionActive]}><Text style={styles.optionTitle}>{kind}</Text><Text style={styles.optionDetail}>{helpKinds[kind].join(' · ')}</Text></Pressable>)}
+              {helpKind && <View style={styles.quickChoices}>{helpKinds[helpKind].map((example) => <Pressable key={example} onPress={() => setRequest(example)} style={[styles.quickChoice, request === example && styles.quickChoiceActive]}><Text style={styles.quickChoiceText}>{example}</Text></Pressable>)}</View>}
+              {helpKind && <TextInput value={request} onChangeText={setRequest} placeholder={helpKind === 'Emergency' ? 'Describe the help you need (optional)' : 'Other resource or request (optional)'} placeholderTextColor={colors.textDim} style={styles.input} />}
+              <Text style={styles.muted}>We’ll use your current location, shifted randomly by up to 500 m.</Text>
+              <View style={{ gap: 8 }}>
+                <Text style={styles.kicker}>ADDITIONAL DETAILS (OPTIONAL)</Text>
+                <TextInput value={details} onChangeText={setDetails} placeholder="What help do you need?" placeholderTextColor={colors.textDim} style={[styles.input, styles.detailsInput]} multiline textAlignVertical="top" />
+              </View>
+              <Text style={styles.disclaimer}>Your request will be shared with the SafeTogether community. Incident reports are also available to authorities. For immediate danger, call local emergency services.</Text>
+              {submitError && <Text accessibilityRole="alert" style={styles.submitError}>{submitError}</Text>}
+            </ScrollView>
+            <View style={styles.helpModalActions}>
+              <Button label={submitting ? 'Sending…' : 'Send help request'} icon="send" disabled={!helpKind || submitting} onPress={() => { void submitHelpRequest(); }} />
+              <Pressable onPress={() => setHelpMenuOpen(false)} style={styles.helpCancelButton} accessibilityRole="button"><Text style={styles.helpCancelText}>Cancel</Text></Pressable>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
     </View>
   );
 }
@@ -815,10 +829,19 @@ const styles = StyleSheet.create({
   topControls: { position: 'absolute', top: 12, left: 12, flexDirection: 'row', alignItems: 'center', zIndex: 130 },
   mapActions: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   bottomHelpButton: { alignItems: 'flex-end', marginBottom: 4 },
-  helpPage: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, backgroundColor: colors.bg },
-  helpContent: { padding: 20, paddingBottom: 40, gap: 12 },
-  helpHeader: { flexDirection: 'row', alignItems: 'flex-start', gap: 12 },
-  helpOption: { borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, padding: 12 },
+  helpModalRoot: { flex: 1, justifyContent: 'flex-end' },
+  helpScrim: { ...StyleSheet.absoluteFill, backgroundColor: 'rgba(16, 24, 40, 0.48)' },
+  helpSheet: { maxHeight: '92%', backgroundColor: colors.card, borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingTop: 20, paddingBottom: Platform.OS === 'ios' ? 28 : 18, ...shadow },
+  helpModalHeader: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', paddingHorizontal: 20, paddingBottom: 14 },
+  helpModalTitleWrap: { flex: 1, gap: 3 },
+  helpModalTitle: { color: colors.text, fontSize: 21, fontWeight: '900' },
+  helpModalSubtitle: { color: colors.textMuted, fontSize: 13 },
+  helpCloseButton: { width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.bg },
+  helpContent: { paddingHorizontal: 20, paddingBottom: 16, gap: 18 },
+  helpModalActions: { paddingHorizontal: 20, paddingTop: 10, borderTopWidth: 1, borderTopColor: colors.border, gap: 4 },
+  helpCancelButton: { height: 38, alignItems: 'center', justifyContent: 'center' },
+  helpCancelText: { color: colors.textMuted, fontWeight: '700', fontSize: 14 },
+  helpOption: { borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, padding: 12, backgroundColor: colors.card },
   helpOptionActive: { borderColor: colors.blue, backgroundColor: colors.blueSoft },
   optionTitle: { color: colors.text, fontSize: 15, fontWeight: '800' },
   optionDetail: { color: colors.textMuted, fontSize: 12, marginTop: 2 },
