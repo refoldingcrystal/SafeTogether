@@ -118,7 +118,7 @@ function approximate(location) {
   if (!label) throw fail(400, 'Location label is required');
   if (Number.isFinite(location.latitude) && Number.isFinite(location.longitude) && Math.abs(location.latitude) <= 90 && Math.abs(location.longitude) <= 180) {
     // Reduce precision before persistence and public delivery.
-    result.latitude = Number(location.latitude.toFixed(2)); result.longitude = Number(location.longitude.toFixed(2));
+    result.latitude = Number(location.latitude.toFixed(5)); result.longitude = Number(location.longitude.toFixed(5));
   }
   return result;
 }

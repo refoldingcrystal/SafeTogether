@@ -6,13 +6,13 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
 import * as ImagePicker from 'expo-image-picker';
 import { TacticalMap } from '@/components/TacticalMap';
-import { ApproximateLocationPicker } from '@/components/ApproximateLocationPicker';
 import { Button, Card, NeedHelpButton } from '@/components/ui';
 import mock from '@/data/mock.json';
 import { categoryIcons, incidentColors, incidentGuide } from '@/icons';
 import { demonstrationDangerZones, demonstrationHelpOffers, demonstrationIncidents, emergencySites, nearbyPeople, type Coordinate, type DangerZone, type EmergencySite, type MapHelpOffer } from '@/shared/demo';
 import { api, type MapSnapshot } from '@/services/api';
-import type { ApproximateLocation, Incident, PersonalHelpCategory } from '@/shared/models';
+import type { Incident, PersonalHelpCategory } from '@/shared/models';
+import { getApproximateCurrentLocation } from '@/shared/location';
 import { requestSafeRoadRoute, type SafeRoute } from '@/shared/routing';
 import { useApp } from '@/state/app';
 import { colors, radius } from '@/theme';
@@ -36,7 +36,6 @@ export default function MapScreen() {
   const [helpKind, setHelpKind] = useState<HelpKind | null>(null);
   const [request, setRequest] = useState('');
   const [details, setDetails] = useState('');
-  const [requestLocation, setRequestLocation] = useState<ApproximateLocation | null>(null);
   const [dangerZones, setDangerZones] = useState(demonstrationDangerZones);
   const [sites, setSites] = useState(emergencySites);
   const [helpOffers, setHelpOffers] = useState<MapHelpOffer[]>(demonstrationHelpOffers);
@@ -123,13 +122,13 @@ export default function MapScreen() {
   }
 
   async function submitHelpRequest() {
-    if (!helpKind || !requestLocation || submitting) return;
+    if (!helpKind || submitting) return;
     setSubmitting(true);
     setSubmitError(null);
-    const approximateLocation = requestLocation;
     let submitted = false;
     let photoUploadFailed = false;
     try {
+      const approximateLocation = await getApproximateCurrentLocation();
       if (helpKind === 'Request resources') {
         await api.createHelpRequest({ kind: 'resource', title: request || undefined, categories: [request || 'Other practical help'], description: details, approximateLocation });
         submitted = true;
@@ -183,7 +182,6 @@ export default function MapScreen() {
 
   async function openHelpMenu() {
     setHelpMenuOpen(true);
-    setRequestLocation(null);
   }
 
   return (
@@ -281,12 +279,12 @@ export default function MapScreen() {
             {(Object.keys(helpKinds) as HelpKind[]).map((kind) => <Pressable key={kind} onPress={() => { setHelpKind(kind); setRequest(''); }} style={[styles.helpOption, helpKind === kind && styles.helpOptionActive]}><Text style={styles.optionTitle}>{kind}</Text><Text style={styles.optionDetail}>{helpKinds[kind].join(' · ')}</Text></Pressable>)}
             {helpKind && <View style={styles.quickChoices}>{helpKinds[helpKind].map((example) => <Pressable key={example} onPress={() => setRequest(example)} style={[styles.quickChoice, request === example && styles.quickChoiceActive]}><Text style={styles.quickChoiceText}>{example}</Text></Pressable>)}</View>}
             {helpKind && <TextInput value={request} onChangeText={setRequest} placeholder={helpKind === 'Emergency' ? 'Describe the help you need (optional)' : 'Other resource or request (optional)'} placeholderTextColor={colors.textDim} style={styles.input} />}
-            <ApproximateLocationPicker value={requestLocation} onChange={setRequestLocation} />
+            <Text style={styles.muted}>We’ll use your current location, shifted randomly by up to 500 m.</Text>
             <Text style={styles.kicker}>ADDITIONAL DETAILS (OPTIONAL)</Text><TextInput value={details} onChangeText={setDetails} placeholder="What help do you need?" placeholderTextColor={colors.textDim} style={[styles.input, styles.detailsInput]} multiline textAlignVertical="top" />
             {helpKind !== 'Request resources' && <View style={styles.photoField}><Text style={styles.kicker}>PHOTOS (OPTIONAL · UP TO 3)</Text><Button label="Add photos" icon="image-outline" color={colors.blue} outline onPress={() => { void addIncidentPhotos(); }} /><View style={styles.photoRow}>{incidentPhotos.map((photo) => <Pressable key={photo.uri} onPress={() => setIncidentPhotos((current) => current.filter((item) => item.uri !== photo.uri))} accessibilityRole="button" accessibilityLabel="Remove photo"><Image source={{ uri: photo.uri }} style={styles.photoPreview} /></Pressable>)}</View></View>}
             <Text style={styles.disclaimer}>Your request will be shared with the SafeTogether community. Incident reports are also available to authorities. For immediate danger, call local emergency services.</Text>
             {submitError && <Text accessibilityRole="alert" style={styles.submitError}>{submitError}</Text>}
-            <Button label={submitting ? 'Sending…' : 'Send help request'} icon="send" disabled={!helpKind || submitting || !requestLocation} onPress={() => { void submitHelpRequest(); }} />
+            <Button label={submitting ? 'Sending…' : 'Send help request'} icon="send" disabled={!helpKind || submitting} onPress={() => { void submitHelpRequest(); }} />
           </ScrollView>
         </View>
       )}

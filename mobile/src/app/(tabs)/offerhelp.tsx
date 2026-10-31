@@ -4,11 +4,10 @@ import Animated, { FadeInDown } from 'react-native-reanimated';
 import { router, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Button, Card, Pill } from '@/components/ui';
-import { ApproximateLocationPicker } from '@/components/ApproximateLocationPicker';
 import mock from '@/data/mock.json';
 import { helpCategories } from '@/shared/demo';
 import { useApp } from '@/state/app';
-import type { ApproximateLocation } from '@/shared/models';
+import { getApproximateCurrentLocation } from '@/shared/location';
 import { api, type HelpFeedItem as ApiHelpFeedItem } from '@/services/api';
 import { colors, radius, shadow } from '@/theme';
 
@@ -28,7 +27,6 @@ export default function HelpScreen() {
   const [offerModalVisible, setOfferModalVisible] = useState(false);
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
   const [description, setDescription] = useState('');
-  const [offerLocation, setOfferLocation] = useState<ApproximateLocation | null>(null);
   const [feedItems, setFeedItems] = useState<HelpFeedItem[]>(mock.helpFeed as HelpFeedItem[]);
   const [editingOfferId, setEditingOfferId] = useState<string | null>(null);
   const [activeChat, setActiveChat] = useState<HelpFeedItem | null>(null);
@@ -55,7 +53,6 @@ export default function HelpScreen() {
     setOfferModalVisible(false);
     setSelectedCategories([]);
     setDescription('');
-    setOfferLocation(null);
     setEditingOfferId(null);
   }
 
@@ -70,14 +67,11 @@ export default function HelpScreen() {
       Alert.alert('Choose what you can offer', 'Select at least one type of help.');
       return;
     }
-    if (offerLocation?.latitude == null || offerLocation.longitude == null) {
-      Alert.alert('Set a map location', 'Use your current location so people can find this offer on the map.');
-      return;
-    }
     try {
+      const approximateLocation = await getApproximateCurrentLocation();
       const offer = editingOfferId
-        ? await api.updateOffer(editingOfferId, { categories: selectedCategories, description: description.trim(), approximateLocation: offerLocation })
-        : await api.createOffer({ categories: selectedCategories, description: description.trim(), approximateLocation: offerLocation });
+        ? await api.updateOffer(editingOfferId, { categories: selectedCategories, description: description.trim(), approximateLocation })
+        : await api.createOffer({ categories: selectedCategories, description: description.trim(), approximateLocation });
       setEditingOfferId(offer.id);
       setFeedItems(await api.getHelpFeed());
       closeOfferModal();
@@ -90,7 +84,6 @@ export default function HelpScreen() {
     setEditingOfferId(offer.id);
     setSelectedCategories(offer.tags);
     setDescription(offer.description || '');
-    setOfferLocation(offer.approximateLocation || null);
     setOfferModalVisible(true);
   }
 
@@ -160,11 +153,9 @@ export default function HelpScreen() {
         editing={editingOfferId !== null}
         selectedCategories={selectedCategories}
         description={description}
-        offerLocation={offerLocation}
         onClose={closeOfferModal}
         onToggleCategory={toggleCategory}
         onChangeDescription={setDescription}
-        onChangeLocation={setOfferLocation}
         onPublish={publishOffer}
       />
       <CoordinationChat
@@ -182,22 +173,18 @@ function OfferHelpModal({
   editing,
   selectedCategories,
   description,
-  offerLocation,
   onClose,
   onToggleCategory,
   onChangeDescription,
-  onChangeLocation,
   onPublish,
 }: {
   visible: boolean;
   editing: boolean;
   selectedCategories: string[];
   description: string;
-  offerLocation: ApproximateLocation | null;
   onClose: () => void;
   onToggleCategory: (category: string) => void;
   onChangeDescription: (value: string) => void;
-  onChangeLocation: (value: ApproximateLocation | null) => void;
   onPublish: () => void;
 }) {
   return (
@@ -235,8 +222,7 @@ function OfferHelpModal({
               })}
             </View>
 
-            <ApproximateLocationPicker value={offerLocation} onChange={onChangeLocation} />
-            <Text style={styles.mapLocationHint}>Use current location to place this offer on other people’s maps. Typed locations can’t create a map pin.</Text>
+            <Text style={styles.mapLocationHint}>We’ll use your current location, shifted randomly by up to 500 m.</Text>
 
             <View style={styles.fieldGroup}>
               <Text style={styles.sectionLabel}>DESCRIPTION <Text style={styles.optional}>(OPTIONAL)</Text></Text>
@@ -256,7 +242,7 @@ function OfferHelpModal({
           </ScrollView>
 
           <View style={styles.modalActions}>
-            <Button label={editing ? 'Save changes' : 'Publish offer'} icon={editing ? 'checkmark' : 'hand-left'} color={colors.green} disabled={!selectedCategories.length || offerLocation?.latitude == null || offerLocation.longitude == null} onPress={onPublish} />
+            <Button label={editing ? 'Save changes' : 'Publish offer'} icon={editing ? 'checkmark' : 'hand-left'} color={colors.green} disabled={!selectedCategories.length} onPress={onPublish} />
             <Pressable onPress={onClose} style={styles.cancelButton} accessibilityRole="button">
               <Text style={styles.cancelText}>Cancel</Text>
             </Pressable>
