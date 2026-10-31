@@ -130,6 +130,7 @@ const HELP_CATEGORIES = ['Shelter', 'Food and water', 'Transport', 'Qualified fi
 const PERSONAL_HELP_CATEGORIES = ['Injured', 'Stranded', 'Lost', 'Other personal assistance'];
 const LEGACY_PERSONAL_HELP_CATEGORIES = ['Medical emergency', 'Trapped person', 'Missing person'];
 const HELP_ICONS = { 'Shelter': 'home', 'Food and water': 'water', 'Transport': 'bus', 'Qualified first aid': 'medkit', 'Supplies': 'cube', 'Other practical help': 'hand-left' };
+const PERSONAL_HELP_ICONS = { Injured: 'medkit', Stranded: 'walk', Lost: 'search', 'Other personal assistance': 'help-circle', 'Medical emergency': 'medkit', 'Trapped person': 'warning', 'Missing person': 'search' };
 function normalizeHelpKind(value) {
   return ({ resource: 'resource', 'Request resources': 'resource', emergency: 'emergency', Emergency: 'emergency' })[value] || null;
 }
@@ -169,6 +170,15 @@ function publicHelpRequest(request, viewerId) {
     tags: request.tags, description: request.description || undefined, status: request.status, createdAt: request.createdAt,
   };
 }
+function publicIncidentRequest(incident, viewerId) {
+  return {
+    id: incident.id, type: 'request', kind: 'emergency', icon: PERSONAL_HELP_ICONS[incident.category] || 'hand-left',
+    title: incident.category, author: displayName(incident.reporterId),
+    distance: incident.approximateLocation?.label || 'Location not shared', tags: [incident.category],
+    description: incident.description || undefined, isMine: incident.reporterId === viewerId,
+    status: incident.status, createdAt: incident.submittedAt, approximateLocation: incident.approximateLocation || null,
+  };
+}
 function publicIncident(incident) {
   const { attachments, exactLocation, reporterId, shareWithAuthorities, ...safe } = incident;
   return { ...safe, reporterName: displayName(reporterId) };
@@ -179,6 +189,7 @@ function isPersonalHelpIncident(incident) {
 function helpFeed(viewerId) {
   return [
     ...db.helpRequests.filter((request) => request.status === 'active' && request.kind === 'resource').map((request) => publicHelpRequest(request, viewerId)),
+    ...db.incidents.filter((incident) => isPersonalHelpIncident(incident) && incident.status !== 'rejected').map((incident) => publicIncidentRequest(incident, viewerId)),
     ...db.offers.filter((offer) => offer.status === 'active').map((offer) => publicOffer(offer, viewerId)),
   ].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 }
