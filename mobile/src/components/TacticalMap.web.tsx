@@ -62,6 +62,7 @@ export function TacticalMap(props: TacticalMapProps) {
   const [tileUnavailable, setTileUnavailable] = useState(false);
   const [placeChoices, setPlaceChoices] = useState<MapPlaceItem[] | null>(null);
   const { shelling, sos, route, showBasement, showCommunityReports = true, incidents, selectedId, onSelect, dangerZones = [], emergencySites = [], nearbyPeople = [], helpOffers = [], plannedRoute, userLocation = mock.me, onSelectDanger, onSelectSite, onSelectOffer } = props;
+  const pulsingIds = new Set(props.pulseIds ?? []);
   const placeGroups = groupMapPlaces([
     ...incidents.flatMap((incident) => {
       const coordinate = incidentPoint(incident);
@@ -104,7 +105,7 @@ export function TacticalMap(props: TacticalMapProps) {
           const pos = incidentPoint(incident);
           if (!pos) return null;
           const color = incidentColors[incident.category] ?? colors.blue;
-          const cls = ['m-pin', incident.verificationStatus === 'unverified' ? 'unverified' : '', incident.id === selectedId ? 'selected' : ''].join(' ');
+          const cls = ['m-pin', incident.verificationStatus === 'unverified' ? 'unverified' : '', incident.id === selectedId ? 'selected' : '', pulsingIds.has(`incident:${incident.id}`) ? 'm-pulse' : ''].join(' ');
           return (
             <span key={incident.id}>
               <Circle
@@ -129,7 +130,7 @@ export function TacticalMap(props: TacticalMapProps) {
               {[1, 0.7, 0.42].map((factor) => (
                 <Circle key={factor} center={ll(zone.coordinate)} radius={zone.radius * factor} pathOptions={{ color: factor === 1 ? color : 'transparent', weight: factor === 1 ? 2 : 0, fillColor: color, fillOpacity: factor === 1 ? 0.1 : factor === 0.7 ? 0.13 : 0.2 }} />
               ))}
-              {!groupedKeys.has(`danger:${zone.id}`) && <Marker position={ll(zone.coordinate)} icon={icon(`<div class="m-danger" style="--c:${color}">${dangerSymbol(zone)}<div class="m-label">${dangerLabel(zone)}</div></div>`, [38, 38])} eventHandlers={{ click: () => onSelectDanger?.(zone.id) }} />}
+              {!groupedKeys.has(`danger:${zone.id}`) && <Marker position={ll(zone.coordinate)} icon={icon(`<div class="m-danger${pulsingIds.has(`danger:${zone.id}`) ? ' m-pulse' : ''}" style="--c:${color}">${dangerSymbol(zone)}<div class="m-label">${dangerLabel(zone)}</div></div>`, [38, 38])} eventHandlers={{ click: () => onSelectDanger?.(zone.id) }} />}
             </span>
           );
         })}
@@ -157,18 +158,18 @@ export function TacticalMap(props: TacticalMapProps) {
 
         {emergencySites.map((site) => (
           groupedKeys.has(`site:${site.id}`) ? null :
-          <Marker key={site.id} position={ll(site.coordinate)} icon={icon(`<div class="m-site" style="--c:${siteColor(site)}">${siteSymbol(site)}<div class="m-label">${site.title}</div></div>`, [38, 38])} eventHandlers={{ click: () => onSelectSite?.(site.id) }} />
+          <Marker key={site.id} position={ll(site.coordinate)} icon={icon(`<div class="m-site${pulsingIds.has(`site:${site.id}`) ? ' m-pulse' : ''}" style="--c:${siteColor(site)}">${siteSymbol(site)}<div class="m-label">${site.title}</div></div>`, [38, 38])} eventHandlers={{ click: () => onSelectSite?.(site.id) }} />
         ))}
         {helpOffers.map((offer) => (
           groupedKeys.has(`offer:${offer.id}`) ? null :
-          <Marker key={offer.id} position={ll(offer.coordinate)} icon={icon('<div class="m-offer">＋<div class="m-label">HELP OFFER</div></div>', [38, 38])} eventHandlers={{ click: () => onSelectOffer?.(offer.id) }} />
+          <Marker key={offer.id} position={ll(offer.coordinate)} icon={icon(`<div class="m-offer${pulsingIds.has(`offer:${offer.id}`) ? ' m-pulse' : ''}">＋<div class="m-label">HELP OFFER</div></div>`, [38, 38])} eventHandlers={{ click: () => onSelectOffer?.(offer.id) }} />
         ))}
         {(props.helpRequests ?? []).map((request) => (
           groupedKeys.has(`request:${request.id}`) ? null :
-          <Marker key={request.id} position={ll(request.coordinate)} icon={icon('<div class="m-help-request"><svg viewBox="0 0 24 24"><path d="M12 3 2.7 20h18.6L12 3Z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M12 8v5.5m0 2.8v.1" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg><div class="m-label">HELP NEEDED</div></div>', [38, 38])} eventHandlers={{ click: () => props.onSelectHelpRequest?.(request.id) }} />
+          <Marker key={request.id} position={ll(request.coordinate)} icon={icon(`<div class="m-help-request${pulsingIds.has(`request:${request.id}`) ? ' m-pulse' : ''}"><svg viewBox="0 0 24 24"><path d="M12 3 2.7 20h18.6L12 3Z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M12 8v5.5m0 2.8v.1" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg><div class="m-label">HELP NEEDED</div></div>`, [38, 38])} eventHandlers={{ click: () => props.onSelectHelpRequest?.(request.id) }} />
         ))}
         {placeGroups.map((group) => (
-          <Marker key={group.key} position={ll(group.coordinate)} zIndexOffset={2000} icon={icon(`<div class="m-cluster">${group.items.length}</div>`, [42, 42])} eventHandlers={{ click: () => setPlaceChoices(group.items) }} />
+          <Marker key={group.key} position={ll(group.coordinate)} zIndexOffset={2000} icon={icon(`<div class="m-cluster${group.items.some((item) => pulsingIds.has(item.key)) ? ' m-pulse' : ''}">${group.items.length}</div>`, [42, 42])} eventHandlers={{ click: () => setPlaceChoices(group.items) }} />
         ))}
 
         {nearbyPeople.map((person) => (

@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
-import { Platform, StyleSheet, Text, View } from 'react-native';
+import { Animated as RNAnimated, Platform, StyleSheet, Text, View, type ReactNode } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { MapPlaceChooser } from '@/components/MapPlaceChooser';
 import MapView, { Circle, Marker, Polyline, UrlTile } from 'react-native-maps';
@@ -26,6 +26,7 @@ export type TacticalMapProps = {
   nearbyPeople?: NearbyPerson[];
   helpOffers?: MapHelpOffer[];
   helpRequests?: MapHelpRequest[];
+  pulseIds?: string[];
   plannedRoute?: Coordinate[];
   destination?: Coordinate;
   userLocation?: Coordinate;
@@ -44,6 +45,24 @@ const MAP_REGION = { latitude: 52.225, longitude: 20.995, latitudeDelta: 0.065, 
 const TILE_CACHE_PATH = `${Paths.cache.uri.replace(/^file:\/\//, '')}map-tiles`;
 const TILE_CACHE_MAX_AGE = 30 * 24 * 60 * 60;
 const precisionRadius = { district: 450, neighborhood: 320, landmark: 200 } as const;
+
+function MapPulse({ active, children }: { active: boolean; children: ReactNode }) {
+  const scale = useRef(new RNAnimated.Value(1)).current;
+
+  useEffect(() => {
+    scale.setValue(1);
+    if (!active) return;
+    const pulse = RNAnimated.loop(RNAnimated.sequence([
+      RNAnimated.timing(scale, { toValue: 1.35, duration: 220, useNativeDriver: true }),
+      RNAnimated.timing(scale, { toValue: 1, duration: 220, useNativeDriver: true }),
+    ]), { iterations: 3 });
+    pulse.start();
+    return () => pulse.stop();
+  }, [active, scale]);
+
+  return <RNAnimated.View style={{ transform: [{ scale }] }}>{children}</RNAnimated.View>;
+}
+
 function incidentPoint(incident: Incident): Coordinate | null {
   const { latitude, longitude } = incident.approximateLocation;
   return latitude == null || longitude == null ? null : { latitude, longitude };
@@ -68,6 +87,7 @@ export function TacticalMap({
   nearbyPeople = [],
   helpOffers = [],
   helpRequests = [],
+  pulseIds = [],
   plannedRoute,
   destination,
   userLocation = mock.me,
@@ -82,6 +102,7 @@ export function TacticalMap({
 }: TacticalMapProps) {
   const map = useRef<MapView>(null);
   const [placeChoices, setPlaceChoices] = useState<MapPlaceItem[] | null>(null);
+  const pulsingIds = useMemo(() => new Set(pulseIds), [pulseIds]);
   const selected = useMemo(() => incidents.find((incident) => incident.id === selectedId), [incidents, selectedId]);
   const placeGroups = useMemo(() => {
     const items: MapPlaceItem[] = [];
@@ -151,13 +172,17 @@ export function TacticalMap({
           if (!coordinate) return null;
           const color = incidentColors[incident.category] ?? colors.blue;
           const isSelected = incident.id === selectedId;
+          const pulseId = `incident:${incident.id}`;
+          const isPulsing = pulsingIds.has(pulseId);
           return (
             <Fragment key={incident.id}>
               <Circle center={coordinate} radius={precisionRadius[incident.approximateLocation.precision]} strokeColor={color} strokeWidth={isSelected ? 2.5 : 1.25} fillColor={`${color}20`} zIndex={1} />
-              {!groupedKeys.has(`incident:${incident.id}`) && <Marker coordinate={coordinate} onPress={() => onSelect(incident.id)} zIndex={isSelected ? 50 : 10}>
-                <View style={[styles.incidentMarker, { backgroundColor: color }, isSelected && styles.incidentMarkerSelected]}>
-                  <Ionicons name={categoryIcons[incident.category] ?? 'alert'} size={16} color="#fff" />
-                </View>
+              {!groupedKeys.has(`incident:${incident.id}`) && <Marker coordinate={coordinate} onPress={() => onSelect(incident.id)} zIndex={isSelected ? 50 : 10} tracksViewChanges={isPulsing}>
+                <MapPulse active={isPulsing}>
+                  <View style={[styles.incidentMarker, { backgroundColor: color }, isSelected && styles.incidentMarkerSelected]}>
+                    <Ionicons name={categoryIcons[incident.category] ?? 'alert'} size={16} color="#fff" />
+                  </View>
+                </MapPulse>
               </Marker>}
             </Fragment>
           );
@@ -166,16 +191,19 @@ export function TacticalMap({
         {dangerZones.map((zone) => {
           const color = dangerColors[zone.kind];
           const icon = dangerIcons[zone.kind];
+          const isPulsing = pulsingIds.has(`danger:${zone.id}`);
           return (
             <Fragment key={zone.id}>
               {[1, 0.7, 0.42].map((factor) => (
                 <Circle key={factor} center={zone.coordinate} radius={zone.radius * factor} strokeColor={factor === 1 ? color : 'transparent'} strokeWidth={factor === 1 ? 2 : 0} fillColor={heatColor(color, factor)} zIndex={2} />
               ))}
-              {!groupedKeys.has(`danger:${zone.id}`) && <Marker coordinate={zone.coordinate} title={zone.title} description={zone.summary} onPress={() => onSelectDanger?.(zone.id)} zIndex={45}>
-                <View style={[styles.dangerMarker, { backgroundColor: color }]}>
-                  <Ionicons name={icon} size={17} color="#fff" />
-                  <Text style={styles.mapMarkerLabel}>{dangerLabels[zone.kind]}</Text>
-                </View>
+              {!groupedKeys.has(`danger:${zone.id}`) && <Marker coordinate={zone.coordinate} title={zone.title} description={zone.summary} onPress={() => onSelectDanger?.(zone.id)} zIndex={45} tracksViewChanges={isPulsing}>
+                <MapPulse active={isPulsing}>
+                  <View style={[styles.dangerMarker, { backgroundColor: color }]}>
+                    <Ionicons name={icon} size={17} color="#fff" />
+                    <Text style={styles.mapMarkerLabel}>{dangerLabels[zone.kind]}</Text>
+                  </View>
+                </MapPulse>
               </Marker>}
             </Fragment>
           );
@@ -199,11 +227,13 @@ export function TacticalMap({
 
         {emergencySites.map((site) => (
           groupedKeys.has(`site:${site.id}`) ? null :
-          <Marker key={site.id} coordinate={site.coordinate} title={site.title} description={site.summary} onPress={() => onSelectSite?.(site.id)} zIndex={30} tracksViewChanges={false}>
-            <View style={[styles.emergencySiteMarker, { backgroundColor: siteColors[site.kind] }]}>
-              <Ionicons name={siteIcons[site.kind]} size={18} color="#fff" />
-              <Text style={styles.mapMarkerLabel}>{siteLabels[site.kind]}</Text>
-            </View>
+          <Marker key={site.id} coordinate={site.coordinate} title={site.title} description={site.summary} onPress={() => onSelectSite?.(site.id)} zIndex={30} tracksViewChanges={pulsingIds.has(`site:${site.id}`)}>
+            <MapPulse active={pulsingIds.has(`site:${site.id}`)}>
+              <View style={[styles.emergencySiteMarker, { backgroundColor: siteColors[site.kind] }]}>
+                <Ionicons name={siteIcons[site.kind]} size={18} color="#fff" />
+                <Text style={styles.mapMarkerLabel}>{siteLabels[site.kind]}</Text>
+              </View>
+            </MapPulse>
           </Marker>
         ))}
         {nearbyPeople.map((person) => (
@@ -216,25 +246,31 @@ export function TacticalMap({
         ))}
         {helpOffers.map((offer) => (
           groupedKeys.has(`offer:${offer.id}`) ? null :
-          <Marker key={offer.id} coordinate={offer.coordinate} zIndex={35} tracksViewChanges={false} onPress={() => onSelectOffer?.(offer.id)}>
-            <View style={styles.offerMarker}>
-              <Ionicons name="medkit" size={15} color="#fff" />
-              <Text style={styles.offerMarkerLabel}>OFFER</Text>
-            </View>
+          <Marker key={offer.id} coordinate={offer.coordinate} zIndex={35} tracksViewChanges={pulsingIds.has(`offer:${offer.id}`)} onPress={() => onSelectOffer?.(offer.id)}>
+            <MapPulse active={pulsingIds.has(`offer:${offer.id}`)}>
+              <View style={styles.offerMarker}>
+                <Ionicons name="medkit" size={15} color="#fff" />
+                <Text style={styles.offerMarkerLabel}>OFFER</Text>
+              </View>
+            </MapPulse>
           </Marker>
         ))}
         {helpRequests.map((request) => (
           groupedKeys.has(`request:${request.id}`) ? null :
-          <Marker key={request.id} coordinate={request.coordinate} zIndex={36} tracksViewChanges={false} onPress={() => onSelectHelpRequest?.(request.id)}>
-            <View style={[styles.offerMarker, styles.requestMarker]}>
-              <Ionicons name="alert-circle" size={16} color="#fff" />
-              <Text style={styles.offerMarkerLabel}>NEED</Text>
-            </View>
+          <Marker key={request.id} coordinate={request.coordinate} zIndex={36} tracksViewChanges={pulsingIds.has(`request:${request.id}`)} onPress={() => onSelectHelpRequest?.(request.id)}>
+            <MapPulse active={pulsingIds.has(`request:${request.id}`)}>
+              <View style={[styles.offerMarker, styles.requestMarker]}>
+                <Ionicons name="alert-circle" size={16} color="#fff" />
+                <Text style={styles.offerMarkerLabel}>NEED</Text>
+              </View>
+            </MapPulse>
           </Marker>
         ))}
         {placeGroups.map((group) => (
-          <Marker key={group.key} coordinate={group.coordinate} zIndex={120} tracksViewChanges={false} onPress={() => setPlaceChoices(group.items)}>
-            <View style={styles.placeGroupMarker}><Ionicons name="layers" size={15} color="#fff" /><Text style={styles.placeGroupCount}>{group.items.length}</Text></View>
+          <Marker key={group.key} coordinate={group.coordinate} zIndex={120} tracksViewChanges={group.items.some((item) => pulsingIds.has(item.key))} onPress={() => setPlaceChoices(group.items)}>
+            <MapPulse active={group.items.some((item) => pulsingIds.has(item.key))}>
+              <View style={styles.placeGroupMarker}><Ionicons name="layers" size={15} color="#fff" /><Text style={styles.placeGroupCount}>{group.items.length}</Text></View>
+            </MapPulse>
           </Marker>
         ))}
         {destination && (
