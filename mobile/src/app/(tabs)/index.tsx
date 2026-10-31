@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { router, useFocusEffect } from 'expo-router';
@@ -28,6 +28,7 @@ const helpKinds: Record<HelpKind, string[]> = {
 
 export default function MapScreen() {
   const app = useApp();
+  const observedMapItemKeys = useRef<Set<string> | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [selectedDangerId, setSelectedDangerId] = useState<string | null>(null);
   const [selectedSiteId, setSelectedSiteId] = useState<string | null>(null);
@@ -50,6 +51,7 @@ export default function MapScreen() {
   const [sites, setSites] = useState(emergencySites);
   const [helpOffers, setHelpOffers] = useState<MapHelpOffer[]>(demonstrationHelpOffers);
   const [helpRequests, setHelpRequests] = useState<MapHelpRequest[]>([]);
+  const [pulseIds, setPulseIds] = useState<string[]>([]);
   const [allIncidents, setAllIncidents] = useState(demonstrationIncidents);
   const [mapLocation, setMapLocation] = useState<Coordinate>(mock.me);
   const [currentLocationOverride, setCurrentLocationOverride] = useState<Coordinate | null>(null);
@@ -68,7 +70,7 @@ export default function MapScreen() {
     }));
     setHelpRequests(snapshot.helpFeed.flatMap((item) => {
       const location = item.approximateLocation;
-      if (item.type !== 'request' || item.isMine || location?.latitude == null || location.longitude == null) return [];
+      if (item.type !== 'request' || item.kind !== 'resource' || item.isMine || location?.latitude == null || location.longitude == null) return [];
       return [{ id: item.id, title: item.title, description: item.description, author: item.author, distance: item.distance, coordinate: { latitude: location.latitude, longitude: location.longitude } }];
     }));
     setAllIncidents(snapshot.incidents.map((item) => ({
@@ -90,10 +92,13 @@ export default function MapScreen() {
     let fallbackLoaded = false;
     let lastOfflineSnapshotSavedAt = 0;
     let lastMapResponse: string | null = null;
+    let pulseTimeout: ReturnType<typeof setTimeout> | null = null;
+    const pendingPulseIds = new Set<string>();
     if (app.offline) {
       offlineMapSnapshotStore.load().then((saved) => {
         if (!active) return;
         if (saved) {
+          observedMapItemKeys.current = visibleMapItemKeys(saved.snapshot);
           applyMapSnapshot(saved.snapshot);
           setMapSnapshotSavedAt(saved.savedAt);
         } else {
@@ -117,6 +122,21 @@ export default function MapScreen() {
         const response = JSON.stringify(snapshot);
         if (response === lastMapResponse) return;
         lastMapResponse = response;
+        const currentMapItemKeys = visibleMapItemKeys(snapshot);
+        if (observedMapItemKeys.current) {
+          const newItems = [...currentMapItemKeys].filter((key) => !observedMapItemKeys.current!.has(key));
+          if (newItems.length) {
+            newItems.forEach((key) => pendingPulseIds.add(key));
+            setPulseIds((current) => [...new Set([...current, ...newItems])]);
+            if (pulseTimeout) clearTimeout(pulseTimeout);
+            pulseTimeout = setTimeout(() => {
+              const completed = new Set(pendingPulseIds);
+              pendingPulseIds.clear();
+              setPulseIds((current) => current.filter((key) => !completed.has(key)));
+            }, 1700);
+          }
+        }
+        observedMapItemKeys.current = currentMapItemKeys;
         applyMapSnapshot(snapshot);
         if (Date.now() - lastOfflineSnapshotSavedAt >= 60_000) {
           lastOfflineSnapshotSavedAt = Date.now();
@@ -144,7 +164,13 @@ export default function MapScreen() {
     void refreshMap();
     if (!api.isConfigured) return () => { active = false; };
     const interval = setInterval(() => { void refreshMap(); }, 4000);
-    return () => { active = false; clearInterval(interval); };
+    return () => {
+      active = false;
+      clearInterval(interval);
+      if (pulseTimeout) clearTimeout(pulseTimeout);
+      pendingPulseIds.clear();
+      setPulseIds([]);
+    };
   }, [app.offline, app.offlineSource, applyMapSnapshot]));
 
   useEffect(() => {
@@ -313,6 +339,7 @@ export default function MapScreen() {
         userLocation={currentLocationOverride ?? (app.offlineSource === 'demo' ? mock.me : mapLocation)}
         helpOffers={helpOffers}
         helpRequests={helpRequests}
+        pulseIds={pulseIds}
         plannedRoute={safeRoute?.coordinates}
         destination={customDestination ?? undefined}
         incidents={incidents}
@@ -510,6 +537,25 @@ function toMapSites(snapshot: Pick<MapSnapshot, 'emergencySites' | 'rendezvousPo
     return [{ id: point.id, kind: 'safe_zone' as const, title: point.title, summary: point.instructions, coordinate: { latitude, longitude } }];
   });
   return [...snapshot.emergencySites, ...rendezvous];
+}
+
+function visibleMapItemKeys(snapshot: MapSnapshot) {
+  const keys = new Set<string>();
+  snapshot.incidents.forEach((incident) => {
+    if (incident.approximateLocation.latitude != null && incident.approximateLocation.longitude != null) keys.add(`incident:${incident.id}`);
+  });
+  snapshot.dangerZones.forEach((zone) => keys.add(`danger:${zone.id}`));
+  snapshot.emergencySites.forEach((site) => keys.add(`site:${site.id}`));
+  snapshot.rendezvousPoints.forEach((point) => {
+    if (point.location.latitude != null && point.location.longitude != null) keys.add(`site:${point.id}`);
+  });
+  snapshot.helpFeed.forEach((item) => {
+    const location = item.approximateLocation;
+    if (item.isMine || location?.latitude == null || location.longitude == null) return;
+    if (item.type === 'offer') keys.add(`offer:${item.id}`);
+    else if (item.kind === 'resource') keys.add(`request:${item.id}`);
+  });
+  return keys;
 }
 
 /** Keep the requested demonstration hazards visible when the API returns its own map snapshot. */

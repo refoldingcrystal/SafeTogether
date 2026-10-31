@@ -268,6 +268,15 @@
     transform: scale(3.2);
   }
 }
+@keyframes m-new-item-pulse {
+  50% {
+    transform: scale(1.35);
+  }
+}
+.m-pulse {
+  animation: m-new-item-pulse 0.5s ease-in-out 3;
+  transform-origin: center;
+}
 @keyframes m-blink {
   50% {
     opacity: 0.55;
