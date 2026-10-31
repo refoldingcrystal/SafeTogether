@@ -1,7 +1,6 @@
 import { type ReactNode } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { router } from 'expo-router';
 import { verificationMeta, type IconName } from '@/icons';
 import type { VerificationStatus } from '@/shared/models';
 import { useApp } from '@/state/app';
@@ -85,50 +84,6 @@ export function PhoneStatusBar() {
   );
 }
 
-/** Presenter controls, rendered outside the phone frame. */
-export function DemoBar() {
-  const app = useApp();
-  return (
-    <View style={styles.demo}>
-      <View style={styles.demoRow}>
-        <DemoToggle
-          icon="flame"
-          label="Shelling"
-          on={app.shelling}
-          onPress={() => {
-            app.setShelling(!app.shelling);
-            router.navigate('/');
-          }}
-        />
-        <DemoToggle
-          icon="airplane"
-          label="Airplane mode"
-          on={app.offlineSource === 'demo'}
-          onPress={() => app.setOffline(app.offlineSource !== 'demo')}
-        />
-        <DemoToggle
-          icon="refresh"
-          label="Reset"
-          on={false}
-          onPress={() => {
-            app.reset();
-            router.navigate('/');
-          }}
-        />
-      </View>
-    </View>
-  );
-}
-
-function DemoToggle({ icon, label, on, onPress }: { icon: IconName; label: string; on: boolean; onPress: () => void }) {
-  return (
-    <Pressable onPress={onPress} style={[styles.demoBtn, on && styles.demoBtnOn]}>
-      <Ionicons name={icon} size={14} color={on ? '#101828' : '#fff'} />
-      <Text style={[styles.demoBtnText, on && { color: '#101828' }]}>{label}</Text>
-    </Pressable>
-  );
-}
-
 const styles = StyleSheet.create({
   pill: {
     flexDirection: 'row',
@@ -163,17 +118,4 @@ const styles = StyleSheet.create({
   },
   statusTime: { fontWeight: '700', fontSize: 14, color: colors.text },
   statusIcons: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  demo: { backgroundColor: '#1D2939', paddingVertical: 8, paddingHorizontal: 12, alignItems: 'center' },
-  demoRow: { flexDirection: 'row', gap: 8, flexWrap: 'wrap', justifyContent: 'center' },
-  demoBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-    borderRadius: radius.pill,
-    backgroundColor: '#344054',
-  },
-  demoBtnOn: { backgroundColor: '#FDB022' },
-  demoBtnText: { color: '#fff', fontWeight: '700', fontSize: 12 },
 });
