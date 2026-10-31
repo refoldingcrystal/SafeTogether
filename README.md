@@ -113,6 +113,8 @@ The persistent store contains users, sessions, incidents, help offers, help requ
 - **ESLint / Expo lint** — code-quality checks.
 - **Expo CLI** — development and Android export validation.
 
+![SafeTogetherThumbnail](SafeTogether.png)
+
 ## Project structure
 
 ```text
