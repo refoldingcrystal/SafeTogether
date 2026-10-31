@@ -70,6 +70,7 @@ export function TacticalMap(props: TacticalMapProps) {
     ...dangerZones.map((zone) => ({ key: `danger:${zone.id}`, kind: 'danger' as const, id: zone.id, title: zone.title, coordinate: zone.coordinate })),
     ...emergencySites.map((site) => ({ key: `site:${site.id}`, kind: 'site' as const, id: site.id, title: site.title, coordinate: site.coordinate })),
     ...helpOffers.map((offer) => ({ key: `offer:${offer.id}`, kind: 'offer' as const, id: offer.id, title: offer.title, coordinate: offer.coordinate })),
+    ...((props.helpRequests ?? []).map((request) => ({ key: `request:${request.id}`, kind: 'request' as const, id: request.id, title: request.title, coordinate: request.coordinate }))),
   ]);
   const groupedKeys = new Set(placeGroups.flatMap((group) => group.items.map((item) => item.key)));
 
@@ -78,6 +79,7 @@ export function TacticalMap(props: TacticalMapProps) {
     if (item.kind === 'incident') onSelect(item.id);
     else if (item.kind === 'danger') onSelectDanger?.(item.id);
     else if (item.kind === 'site') onSelectSite?.(item.id);
+    else if (item.kind === 'request') props.onSelectHelpRequest?.(item.id);
     else onSelectOffer?.(item.id);
   }
 
@@ -160,6 +162,10 @@ export function TacticalMap(props: TacticalMapProps) {
         {helpOffers.map((offer) => (
           groupedKeys.has(`offer:${offer.id}`) ? null :
           <Marker key={offer.id} position={ll(offer.coordinate)} icon={icon('<div class="m-offer">＋<div class="m-label">HELP OFFER</div></div>', [38, 38])} eventHandlers={{ click: () => onSelectOffer?.(offer.id) }} />
+        ))}
+        {(props.helpRequests ?? []).map((request) => (
+          groupedKeys.has(`request:${request.id}`) ? null :
+          <Marker key={request.id} position={ll(request.coordinate)} icon={icon('<div class="m-help-request">? <div class="m-label">HELP NEEDED</div></div>', [38, 38])} eventHandlers={{ click: () => props.onSelectHelpRequest?.(request.id) }} />
         ))}
         {placeGroups.map((group) => (
           <Marker key={group.key} position={ll(group.coordinate)} zIndexOffset={2000} icon={icon(`<div class="m-cluster">${group.items.length}</div>`, [42, 42])} eventHandlers={{ click: () => setPlaceChoices(group.items) }} />

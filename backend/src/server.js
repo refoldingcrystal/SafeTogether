@@ -168,6 +168,7 @@ function publicHelpRequest(request, viewerId) {
     id: request.id, type: 'request', kind: request.kind, icon: request.icon || 'hand-left', title: request.title,
     author: displayName(request.requesterId), isMine: request.requesterId === viewerId, distance: request.approximateLocation?.label || 'Location not shared',
     tags: request.tags, description: request.description || undefined, status: request.status, createdAt: request.createdAt,
+    approximateLocation: request.approximateLocation || null,
   };
 }
 function publicIncidentRequest(incident, viewerId) {
@@ -191,7 +192,8 @@ function helpFeed(viewerId) {
     ...db.helpRequests.filter((request) => request.status === 'active' && request.kind === 'resource').map((request) => publicHelpRequest(request, viewerId)),
     ...db.incidents.filter((incident) => isPersonalHelpIncident(incident) && incident.status !== 'rejected').map((incident) => publicIncidentRequest(incident, viewerId)),
     ...db.offers.filter((offer) => offer.status === 'active').map((offer) => publicOffer(offer, viewerId)),
-  ].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  ].filter((item) => item.type === 'offer' || !item.isMine)
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 }
 async function route(req, res) {
   const url = new URL(req.url, 'http://localhost');
@@ -237,7 +239,7 @@ async function route(req, res) {
   if (resource === 'auth' && method === 'GET' && parts[2] === 'me') return send(res, 200, { user: publicUser(user) });
 
   if (resource === 'map' && method === 'GET') {
-    const incidents = db.incidents.filter((item) => item.status !== 'rejected' && isPersonalHelpIncident(item)).map(publicIncident);
+    const incidents = db.incidents.filter((item) => item.status !== 'rejected' && isPersonalHelpIncident(item) && item.reporterId !== user.id).map(publicIncident);
     const notices = db.notices.filter((item) => item.status === 'published' && (!item.expiresAt || item.expiresAt > now()));
     const rendezvousPoints = db.rendezvousPoints.filter((item) => item.status === 'active');
     const emergencySites = db.emergencySites.filter((item) => item.status === 'active');

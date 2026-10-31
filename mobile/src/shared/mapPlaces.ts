@@ -1,6 +1,6 @@
 import type { Coordinate } from '@/shared/demo';
 
-export type MapPlaceKind = 'incident' | 'danger' | 'site' | 'offer';
+export type MapPlaceKind = 'incident' | 'danger' | 'site' | 'offer' | 'request';
 export type MapPlaceItem = { key: string; id: string; kind: MapPlaceKind; title: string; coordinate: Coordinate };
 export type MapPlaceGroup = { key: string; coordinate: Coordinate; items: MapPlaceItem[] };
 

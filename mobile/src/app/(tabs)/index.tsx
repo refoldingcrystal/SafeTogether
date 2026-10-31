@@ -11,7 +11,7 @@ import { Button, Card, NeedHelpButton } from '@/components/ui';
 import mock from '@/data/mock.json';
 import { offlineDemoPlaces, offlineDemoRoads } from '@/data/offlineMapDemo';
 import { categoryIcons, incidentColors } from '@/icons';
-import { demonstrationDangerZones, demonstrationHelpOffers, demonstrationIncidents, emergencySites, nearbyPeople, type Coordinate, type DangerZone, type EmergencySite, type MapHelpOffer } from '@/shared/demo';
+import { demonstrationDangerZones, demonstrationHelpOffers, demonstrationIncidents, emergencySites, nearbyPeople, type Coordinate, type DangerZone, type EmergencySite, type MapHelpOffer, type MapHelpRequest } from '@/shared/demo';
 import { api, type MapSnapshot } from '@/services/api';
 import { offlineMapSnapshotStore, type OfflineMapSnapshot } from '@/services/offlineMapSnapshotStore';
 import type { Incident, PersonalHelpCategory } from '@/shared/models';
@@ -32,6 +32,7 @@ export default function MapScreen() {
   const [selectedDangerId, setSelectedDangerId] = useState<string | null>(null);
   const [selectedSiteId, setSelectedSiteId] = useState<string | null>(null);
   const [selectedOfferId, setSelectedOfferId] = useState<string | null>(null);
+  const [selectedHelpRequestId, setSelectedHelpRequestId] = useState<string | null>(null);
   const [customDestination, setCustomDestination] = useState<Coordinate | null>(null);
   const [safeRoute, setSafeRoute] = useState<SafeRoute | null>(null);
   const [routeLoading, setRouteLoading] = useState(false);
@@ -48,6 +49,7 @@ export default function MapScreen() {
   const [dangerZones, setDangerZones] = useState(demonstrationDangerZones);
   const [sites, setSites] = useState(emergencySites);
   const [helpOffers, setHelpOffers] = useState<MapHelpOffer[]>(demonstrationHelpOffers);
+  const [helpRequests, setHelpRequests] = useState<MapHelpRequest[]>([]);
   const [allIncidents, setAllIncidents] = useState(demonstrationIncidents);
   const [mapLocation, setMapLocation] = useState<Coordinate>(mock.me);
   const [currentLocationOverride, setCurrentLocationOverride] = useState<Coordinate | null>(null);
@@ -62,6 +64,11 @@ export default function MapScreen() {
     setHelpOffers(snapshot.helpFeed.flatMap((item) => {
       const location = item.approximateLocation;
       if (item.type !== 'offer' || item.isMine || location?.latitude == null || location.longitude == null) return [];
+      return [{ id: item.id, title: item.title, description: item.description, author: item.author, distance: item.distance, coordinate: { latitude: location.latitude, longitude: location.longitude } }];
+    }));
+    setHelpRequests(snapshot.helpFeed.flatMap((item) => {
+      const location = item.approximateLocation;
+      if (item.type !== 'request' || item.isMine || location?.latitude == null || location.longitude == null) return [];
       return [{ id: item.id, title: item.title, description: item.description, author: item.author, distance: item.distance, coordinate: { latitude: location.latitude, longitude: location.longitude } }];
     }));
     setAllIncidents(snapshot.incidents.map((item) => ({
@@ -89,6 +96,7 @@ export default function MapScreen() {
           setDangerZones(demonstrationDangerZones);
           setSites(offlineDemoPlaces);
           setHelpOffers(demonstrationHelpOffers);
+          setHelpRequests([]);
           setAllIncidents(demonstrationIncidents);
           setMapSnapshotSavedAt(null);
         }
@@ -111,6 +119,7 @@ export default function MapScreen() {
         setDangerZones(demonstrationDangerZones);
         setSites(emergencySites);
         setHelpOffers(demonstrationHelpOffers);
+        setHelpRequests([]);
         setAllIncidents(demonstrationIncidents);
       }
     });
@@ -229,10 +238,7 @@ export default function MapScreen() {
       if (helpKind !== 'Request resources') app.setSos(true);
       try {
         const snapshot = await api.getMap();
-        setDangerZones(withDemonstrationHazards(snapshot.dangerZones));
-        const mapSites = withDemonstrationSites(toMapSites(snapshot));
-        setSites(mapSites);
-        setAllIncidents(snapshot.incidents.map((item) => ({ id: item.id, reporterName: item.reporterName, category: item.category, description: item.description, approximateLocation: item.approximateLocation, submittedAt: item.submittedAt, updatedAt: item.updatedAt, source: item.source, verificationStatus: item.verificationStatus })));
+        applyMapSnapshot(snapshot);
       } catch { /* The submission succeeded; keep the currently loaded map. */ }
     } catch (error) {
       if (submitted) {
@@ -285,6 +291,7 @@ export default function MapScreen() {
         nearbyPeople={mapNearbyPeople}
         userLocation={currentLocationOverride ?? (app.offlineSource === 'demo' ? mock.me : mapLocation)}
         helpOffers={helpOffers}
+        helpRequests={helpRequests}
         plannedRoute={safeRoute?.coordinates}
         destination={customDestination ?? undefined}
         incidents={incidents}
@@ -294,21 +301,32 @@ export default function MapScreen() {
           setSelectedDangerId(null);
           setSelectedSiteId(null);
           setSelectedOfferId(null);
+          setSelectedHelpRequestId(null);
         }}
         onSelectDanger={(id) => {
           setSelectedDangerId((current) => current === id ? null : id);
           setSelectedId(null);
           setSelectedSiteId(null);
           setSelectedOfferId(null);
+          setSelectedHelpRequestId(null);
         }}
         onSelectSite={(id) => {
           setSelectedSiteId((current) => current === id ? null : id);
           setSelectedId(null);
           setSelectedDangerId(null);
           setSelectedOfferId(null);
+          setSelectedHelpRequestId(null);
         }}
         onSelectOffer={(id) => {
           setSelectedOfferId((current) => current === id ? null : id);
+          setSelectedHelpRequestId(null);
+          setSelectedId(null);
+          setSelectedDangerId(null);
+          setSelectedSiteId(null);
+        }}
+        onSelectHelpRequest={(id) => {
+          setSelectedHelpRequestId((current) => current === id ? null : id);
+          setSelectedOfferId(null);
           setSelectedId(null);
           setSelectedDangerId(null);
           setSelectedSiteId(null);
@@ -384,6 +402,7 @@ export default function MapScreen() {
           selectedDanger={dangerZones.find((zone) => zone.id === selectedDangerId)}
           selectedSite={sites.find((site) => site.id === selectedSiteId) ?? offlineDemoPlaces.find((site) => site.id === selectedSiteId)}
           selectedOffer={helpOffers.find((offer) => offer.id === selectedOfferId)}
+          selectedHelpRequest={helpRequests.find((request) => request.id === selectedHelpRequestId)}
           safeRoute={safeRoute}
           routeLoading={routeLoading}
           routeError={routeError}
@@ -409,6 +428,7 @@ export default function MapScreen() {
           }}
         onChat={(incident) => setActiveChat({ id: incident.id, author: incident.reporterName, title: incident.category })}
           onChatOffer={(offer) => setActiveChat({ id: offer.id, author: offer.author, title: offer.title })}
+          onChatHelpRequest={(request) => setActiveChat({ id: request.id, author: request.author, title: request.title })}
           navigationActive={navigationActive}
           navigationStep={navigationStep}
           onStartNavigation={() => { setNavigationStep(0); setNavigationActive(true); }}
@@ -422,6 +442,7 @@ export default function MapScreen() {
             setSelectedDangerId(null);
             setSelectedSiteId(null);
             setSelectedOfferId(null);
+            setSelectedHelpRequestId(null);
           }}
         />
       </View>
@@ -505,6 +526,7 @@ function BottomCard({
   selectedDanger,
   selectedSite,
   selectedOffer,
+  selectedHelpRequest,
   safeRoute,
   routeLoading,
   routeError,
@@ -516,6 +538,7 @@ function BottomCard({
   onCloseRoute,
   onChat,
   onChatOffer,
+  onChatHelpRequest,
   navigationActive,
   navigationStep,
   onStartNavigation,
@@ -527,6 +550,7 @@ function BottomCard({
   selectedDanger?: DangerZone;
   selectedSite?: EmergencySite;
   selectedOffer?: MapHelpOffer;
+  selectedHelpRequest?: MapHelpRequest;
   safeRoute: SafeRoute | null;
   routeLoading: boolean;
   routeError: string | null;
@@ -538,6 +562,7 @@ function BottomCard({
   onCloseRoute: () => void;
   onChat: (incident: Incident) => void;
   onChatOffer: (offer: MapHelpOffer) => void;
+  onChatHelpRequest: (request: MapHelpRequest) => void;
   navigationActive: boolean;
   navigationStep: number;
   onStartNavigation: () => void;
@@ -672,6 +697,26 @@ function BottomCard({
           <Text style={styles.muted}>Offered by {selectedOffer.author} · {selectedOffer.distance}</Text>
           {selectedOffer.description && <Text style={styles.body}>{selectedOffer.description}</Text>}
           <Button icon="chatbubble-ellipses" label="Chat" color={colors.blue} onPress={() => onChatOffer(selectedOffer)} />
+        </Card>
+      </Animated.View>
+    );
+  }
+
+  if (selectedHelpRequest) {
+    return (
+      <Animated.View entering={FadeInDown} key={selectedHelpRequest.id}>
+        <Card style={{ borderLeftWidth: 5, borderLeftColor: colors.red }}>
+          <View style={styles.row}>
+            <View style={[styles.incidentIcon, { backgroundColor: colors.red }]}><Ionicons name="help" size={21} color="#fff" /></View>
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.kicker, { color: colors.red }]}>HELP REQUEST</Text>
+              <Text style={styles.title}>{selectedHelpRequest.title}</Text>
+            </View>
+            <Pressable onPress={onClose} accessibilityRole="button" accessibilityLabel="Close" hitSlop={10}><Ionicons name="close" size={22} color={colors.textDim} /></Pressable>
+          </View>
+          <Text style={styles.muted}>Requested by {selectedHelpRequest.author} · {selectedHelpRequest.distance}</Text>
+          {selectedHelpRequest.description && <Text style={styles.body}>{selectedHelpRequest.description}</Text>}
+          <Button icon="chatbubble-ellipses" label="Chat" color={colors.blue} onPress={() => onChatHelpRequest(selectedHelpRequest)} />
         </Card>
       </Animated.View>
     );

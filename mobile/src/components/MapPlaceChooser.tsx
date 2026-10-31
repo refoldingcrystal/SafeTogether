@@ -2,7 +2,7 @@ import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import { colors, radius, shadow } from '@/theme';
 import type { MapPlaceItem } from '@/shared/mapPlaces';
 
-const kindLabel = { incident: 'REPORT', danger: 'DANGER', site: 'SAFE POINT', offer: 'OFFER' } as const;
+const kindLabel = { incident: 'REPORT', danger: 'DANGER', site: 'SAFE POINT', offer: 'OFFER', request: 'HELP NEEDED' } as const;
 
 export function MapPlaceChooser({ visible, items, onChoose, onClose }: {
   visible: boolean;
