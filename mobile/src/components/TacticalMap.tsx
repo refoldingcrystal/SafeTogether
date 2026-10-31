@@ -1,6 +1,7 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { Platform, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { CurrentLocationButton } from '@/components/CurrentLocationButton';
 import { HelpOfferMapPopup } from '@/components/HelpOfferMapPopup';
 import { MapPlaceChooser } from '@/components/MapPlaceChooser';
 import MapView, { Circle, Marker, Polyline, UrlTile } from 'react-native-maps';
@@ -67,6 +68,7 @@ export function TacticalMap({
   onDestinationLongPress,
 }: TacticalMapProps) {
   const map = useRef<MapView>(null);
+  const [currentLocation, setCurrentLocation] = useState<Coordinate | null>(null);
   const [selectedOfferId, setSelectedOfferId] = useState<string | null>(null);
   const [placeChoices, setPlaceChoices] = useState<MapPlaceItem[] | null>(null);
   const selected = useMemo(() => incidents.find((incident) => incident.id === selectedId), [incidents, selectedId]);
@@ -219,10 +221,14 @@ export function TacticalMap({
             <View style={[styles.authorityMarker, { backgroundColor: authority.color }]}><Text style={styles.authorityLabel}>{authority.label}</Text></View>
           </Marker>
         ))}
-        <Marker coordinate={mock.me} zIndex={100} tracksViewChanges={false}>
+        <Marker coordinate={currentLocation ?? mock.me} zIndex={100} tracksViewChanges={false}>
           <View style={[styles.meMarker, sos && styles.meMarkerSos]}><Ionicons name={sos ? 'radio' : 'person'} size={12} color="#fff" /></View>
         </Marker>
       </MapView>
+      <CurrentLocationButton onLocation={(coordinate) => {
+        setCurrentLocation(coordinate);
+        map.current?.animateToRegion(regionAround(coordinate), 650);
+      }} />
       {placeChoices && <MapPlaceChooser items={placeChoices} onChoose={choosePlace} onClose={() => setPlaceChoices(null)} />}
       {selectedOffer && <HelpOfferMapPopup offer={selectedOffer} onClose={() => setSelectedOfferId(null)} />}
       <View pointerEvents="none" style={styles.attribution}><Text style={styles.attributionText}>© OpenStreetMap contributors</Text></View>

@@ -6,6 +6,7 @@ import L from 'leaflet';
 import { Circle, MapContainer, Marker, Polyline, TileLayer, useMap } from 'react-leaflet';
 import { HelpOfferMapPopup } from '@/components/HelpOfferMapPopup';
 import { MapPlaceChooser } from '@/components/MapPlaceChooser';
+import { CurrentLocationButton } from '@/components/CurrentLocationButton';
 import mock from '@/data/mock.json';
 import { incidentColors } from '@/icons';
 import { colors } from '@/theme';
@@ -65,6 +66,7 @@ export function TacticalMap(props: TacticalMapProps) {
   const [tileUnavailable, setTileUnavailable] = useState(false);
   const [placeChoices, setPlaceChoices] = useState<MapPlaceItem[] | null>(null);
   const [selectedOfferId, setSelectedOfferId] = useState<string | null>(null);
+  const [currentLocation, setCurrentLocation] = useState<LatLng | null>(null);
   const { shelling, sos, route, showBasement, incidents, selectedId, onSelect, dangerZones = [], emergencySites = [], helpOffers = [], plannedRoute, onSelectDanger, onSelectSite } = props;
   const selectedOffer = helpOffers.find((offer) => offer.id === selectedOfferId);
   const placeGroups = groupMapPlaces([
@@ -102,6 +104,7 @@ export function TacticalMap(props: TacticalMapProps) {
           />
         )}
         <Camera {...props} />
+        <UserLocationCamera coordinate={currentLocation} />
 
         {incidents.map((incident) => {
           const pos = incidentPoint(incident);
@@ -187,7 +190,7 @@ export function TacticalMap(props: TacticalMapProps) {
         )}
 
         <Marker
-          position={ll(mock.me)}
+          position={ll(currentLocation ?? mock.me)}
           zIndexOffset={1000}
           icon={icon(
             `<div class="m-me ${sos ? 'sos' : ''}" style="--c:${sos ? colors.red : colors.blue}"><div class="m-label">${sos ? 'You · SOS' : 'You · 🔒 private'}</div></div>`,
@@ -195,12 +198,21 @@ export function TacticalMap(props: TacticalMapProps) {
           )}
         />
       </MapContainer>
+      <CurrentLocationButton onLocation={setCurrentLocation} />
       {placeChoices && <MapPlaceChooser items={placeChoices} onChoose={choosePlace} onClose={() => setPlaceChoices(null)} />}
       {selectedOffer && <HelpOfferMapPopup offer={selectedOffer} onClose={() => setSelectedOfferId(null)} />}
       {!tileUrl && <View pointerEvents="none" style={styles.tileNotice}><Text style={styles.tileNoticeText}>Basemap provider not configured · demonstration overlays only</Text></View>}
       {tileUrl && tileUnavailable && <View pointerEvents="none" style={styles.tileNotice}><Text style={styles.tileNoticeText}>Basemap unavailable · demonstration overlays only</Text></View>}
     </View>
   );
+}
+
+function UserLocationCamera({ coordinate }: { coordinate: LatLng | null }) {
+  const map = useMap();
+  useEffect(() => {
+    if (coordinate) map.flyTo(ll(coordinate), 15, { duration: 0.8 });
+  }, [coordinate, map]);
+  return null;
 }
 
 function dangerColor(zone: DangerZone) {
