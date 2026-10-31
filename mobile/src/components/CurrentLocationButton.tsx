@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Alert, Pressable, StyleSheet, Text } from 'react-native';
+import { Alert, Pressable, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
 import type { Coordinate } from '@/shared/demo';
@@ -35,12 +35,10 @@ export function CurrentLocationButton({ onLocation }: { onLocation: (location: C
       style={styles.button}
     >
       <Ionicons name={locating ? 'locate-outline' : 'locate'} size={22} color={colors.blue} />
-      {locating && <Text style={styles.loading}>Locating…</Text>}
     </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
-  button: { position: 'absolute', zIndex: 1600, right: 14, bottom: 250, minWidth: 48, height: 48, paddingHorizontal: 12, borderRadius: 24, backgroundColor: colors.card, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 7, ...shadow },
-  loading: { color: colors.text, fontSize: 12, fontWeight: '700' },
+  button: { position: 'absolute', zIndex: 1600, top: 62, right: 12, width: 42, height: 42, borderRadius: 21, backgroundColor: colors.card, alignItems: 'center', justifyContent: 'center', ...shadow },
 });
