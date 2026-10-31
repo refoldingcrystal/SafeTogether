@@ -147,7 +147,7 @@ function publicOffer(offer, viewerId) {
     id: offer.id, type: 'offer', categories, icon: HELP_ICONS[categories[0]] || 'hand-left', title: categories.join(' · '),
     author: displayName(offer.ownerId), distance: offer.approximateLocation?.label || 'Location not shared', tags: categories,
     approximateLocation: offer.approximateLocation || null,
-    description: offer.description || undefined, photos: (offer.attachments || []).filter((item) => item.approved).map((item) => publicAttachment(item).url),
+    description: offer.description || undefined,
     isMine: offer.ownerId === viewerId, status: offer.status, createdAt: offer.createdAt,
   };
 }
@@ -222,8 +222,7 @@ async function route(req, res) {
 
   if (resource === 'attachments' && method === 'GET' && recordId) {
     const incident = db.incidents.find((row) => (row.attachments || []).some((item) => item.id === recordId));
-    const offer = db.offers.find((row) => (row.attachments || []).some((item) => item.id === recordId));
-    const attachment = (incident?.attachments || []).find((item) => item.id === recordId) || (offer?.attachments || []).find((item) => item.id === recordId);
+    const attachment = (incident?.attachments || []).find((item) => item.id === recordId);
     if (!attachment) throw fail(404, 'Attachment not found');
     const publiclyVisible = attachment.approved && ((incident && incident.status === 'verified') || (offer && offer.status === 'active'));
     let viewer = null;
@@ -322,17 +321,9 @@ async function route(req, res) {
   }
 
   if (resource === 'offers' && method === 'GET' && parts.length === 2) return send(res, 200, { data: db.offers.filter((o) => o.status === 'active').map((offer) => publicOffer(offer, user.id)) });
-  if (resource === 'offers' && method === 'POST' && recordId && parts[3] === 'attachments') {
-    const offer = db.offers.find((item) => item.id === recordId); if (!offer) throw fail(404, 'Offer not found');
-    if (offer.ownerId !== user.id && user.role !== 'authority') throw fail(403, 'Only the offer owner or an authority can attach photos');
-    if ((offer.attachments || []).length >= 3) throw fail(409, 'An offer can have up to 3 photos');
-    const body = await readBody(req); const attachment = await storeImage(body.data);
-    offer.attachments ||= []; offer.attachments.push(attachment); offer.updatedAt = now(); await persist();
-    return send(res, 201, { data: { id: attachment.id, moderation: 'pending' } });
-  }
   if (resource === 'offers' && method === 'POST' && parts.length === 2) {
     const body = await readBody(req); const categories = helpCategories(body); const description = clean(body.description, 1000);
-    const row = { id: id('off'), categories, category: categories[0], description, approximateLocation: optionalLocation(body.approximateLocation), availability: clean(body.availability, 100), capacity: clean(body.capacity, 100), status: 'active', createdAt: now(), updatedAt: now(), ownerId: user.id, attachments: [] };
+    const row = { id: id('off'), categories, category: categories[0], description, approximateLocation: optionalLocation(body.approximateLocation), availability: clean(body.availability, 100), capacity: clean(body.capacity, 100), status: 'active', createdAt: now(), updatedAt: now(), ownerId: user.id };
     db.offers.unshift(row); audit(user.id, 'offer_created', 'help_offer', row.id); await persist(); return send(res, 201, { data: publicOffer(row, user.id) });
   }
   if (resource === 'offers' && method === 'PATCH' && recordId) {
@@ -345,7 +336,6 @@ async function route(req, res) {
     if (body.availability !== undefined) row.availability = clean(body.availability, 100);
     if (body.capacity !== undefined) row.capacity = clean(body.capacity, 100);
     if (['active','withdrawn','expired'].includes(body.status)) row.status = body.status;
-    if (user.role === 'authority' && Array.isArray(body.approvedPhotoIds)) for (const photo of row.attachments || []) photo.approved = body.approvedPhotoIds.includes(photo.id);
     row.updatedAt = now(); audit(user.id, 'offer_updated', 'help_offer', row.id, { status: row.status }); await persist();
     return send(res, 200, { data: publicOffer(row, user.id) });
   }

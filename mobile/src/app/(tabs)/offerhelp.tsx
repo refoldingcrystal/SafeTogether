@@ -1,9 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Alert, Image, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Alert, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { router, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import * as ImagePicker from 'expo-image-picker';
 import * as Location from 'expo-location';
 import { Button, Card, Pill } from '@/components/ui';
 import mock from '@/data/mock.json';
@@ -17,7 +16,6 @@ type HelpFeedItem = ApiHelpFeedItem;
 
 type ChatMessage = { id: string; text: string; sentAt: string };
 
-const MAX_PHOTOS = 3;
 const toChatMessage = (message: { id: string; text: string; sentAt: string }): ChatMessage => ({
   id: message.id,
   text: message.text,
@@ -31,9 +29,7 @@ export default function HelpScreen() {
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
   const [description, setDescription] = useState('');
   const [offerLocation, setOfferLocation] = useState<ApproximateLocation | null>(null);
-  const [photos, setPhotos] = useState<string[]>([]);
   const [feedItems, setFeedItems] = useState<HelpFeedItem[]>(mock.helpFeed as HelpFeedItem[]);
-  const [photoData, setPhotoData] = useState<Record<string, string>>({});
   const [editingOfferId, setEditingOfferId] = useState<string | null>(null);
   const [activeChat, setActiveChat] = useState<HelpFeedItem | null>(null);
   const [chatThreads, setChatThreads] = useState<Record<string, ChatMessage[]>>({});
@@ -60,8 +56,6 @@ export default function HelpScreen() {
     setSelectedCategories([]);
     setDescription('');
     setOfferLocation(null);
-    setPhotos([]);
-    setPhotoData({});
     setEditingOfferId(null);
   }
 
@@ -69,25 +63,6 @@ export default function HelpScreen() {
     setSelectedCategories((current) => current.includes(category)
       ? current.filter((item) => item !== category)
       : [...current, category]);
-  }
-
-  async function addPhotos() {
-    const remaining = MAX_PHOTOS - photos.length;
-    if (remaining <= 0) return;
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ['images'],
-      allowsMultipleSelection: true,
-      selectionLimit: remaining,
-      quality: 0.8,
-      base64: true,
-    });
-    if (result.canceled) return;
-    const tooLarge = result.assets.some((asset) => asset.fileSize && asset.fileSize > 5 * 1024 * 1024);
-    if (tooLarge) Alert.alert('Photo too large', 'Choose photos smaller than 5 MB each.');
-    const accepted = result.assets.filter((asset) => (!asset.fileSize || asset.fileSize <= 5 * 1024 * 1024) && !!asset.base64);
-    if (accepted.length < result.assets.filter((asset) => !asset.fileSize || asset.fileSize <= 5 * 1024 * 1024).length) Alert.alert('Photo unavailable', 'The selected photo could not be prepared for upload.');
-    setPhotos((current) => [...current, ...accepted.map((asset) => asset.uri)].slice(0, MAX_PHOTOS));
-    setPhotoData((current) => ({ ...current, ...Object.fromEntries(accepted.map((asset) => [asset.uri, `data:image/jpeg;base64,${asset.base64}`])) }));
   }
 
   async function publishOffer() {
@@ -100,13 +75,6 @@ export default function HelpScreen() {
         ? await api.updateOffer(editingOfferId, { categories: selectedCategories, description: description.trim(), approximateLocation: offerLocation })
         : await api.createOffer({ categories: selectedCategories, description: description.trim(), approximateLocation: offerLocation });
       setEditingOfferId(offer.id);
-      for (const uri of photos) {
-        const data = photoData[uri];
-        if (data) {
-          await api.uploadOfferPhoto(offer.id, data);
-          setPhotoData((current) => { const next = { ...current }; delete next[uri]; return next; });
-        }
-      }
       setFeedItems(await api.getHelpFeed());
       closeOfferModal();
     } catch (error) {
@@ -119,8 +87,6 @@ export default function HelpScreen() {
     setSelectedCategories(offer.tags);
     setDescription(offer.description || '');
     setOfferLocation(offer.approximateLocation || null);
-    setPhotos(offer.photos || []);
-    setPhotoData({});
     setOfferModalVisible(true);
   }
 
@@ -205,14 +171,11 @@ export default function HelpScreen() {
         selectedCategories={selectedCategories}
         description={description}
         offerLocation={offerLocation}
-        photos={photos}
         onClose={closeOfferModal}
         onToggleCategory={toggleCategory}
         onChangeDescription={setDescription}
         onSetLocation={shareOfferLocation}
         onClearLocation={() => setOfferLocation(null)}
-        onAddPhotos={addPhotos}
-        onRemovePhoto={(uri) => setPhotos((current) => current.filter((photo) => photo !== uri))}
         onPublish={publishOffer}
       />
       <CoordinationChat
@@ -231,14 +194,11 @@ function OfferHelpModal({
   selectedCategories,
   description,
   offerLocation,
-  photos,
   onClose,
   onToggleCategory,
   onChangeDescription,
   onSetLocation,
   onClearLocation,
-  onAddPhotos,
-  onRemovePhoto,
   onPublish,
 }: {
   visible: boolean;
@@ -246,14 +206,11 @@ function OfferHelpModal({
   selectedCategories: string[];
   description: string;
   offerLocation: ApproximateLocation | null;
-  photos: string[];
   onClose: () => void;
   onToggleCategory: (category: string) => void;
   onChangeDescription: (value: string) => void;
   onSetLocation: () => void;
   onClearLocation: () => void;
-  onAddPhotos: () => void;
-  onRemovePhoto: (uri: string) => void;
   onPublish: () => void;
 }) {
   return (
@@ -301,7 +258,7 @@ function OfferHelpModal({
               ) : (
                 <Pressable onPress={onSetLocation} style={styles.locationButton} accessibilityRole="button">
                   <Ionicons name="location-outline" size={18} color={colors.green} />
-                  <Text style={styles.addPhotoText}>Add approximate current location</Text>
+                  <Text style={styles.mapLocationActionText}>Add approximate current location</Text>
                 </Pressable>
               )}
               <Text style={styles.photoHint}>The map shows an approximate neighborhood location.</Text>
@@ -322,26 +279,6 @@ function OfferHelpModal({
               <Text style={styles.characterCount}>{description.length}/400</Text>
             </View>
 
-            <View style={styles.fieldGroup}>
-              <Text style={styles.sectionLabel}>PHOTOS <Text style={styles.optional}>(OPTIONAL · UP TO {MAX_PHOTOS})</Text></Text>
-              <View style={styles.photoRow}>
-                {photos.map((uri) => (
-                  <View key={uri} style={styles.photoWrap}>
-                    <Image source={{ uri }} style={styles.photoPreview} />
-                    <Pressable onPress={() => onRemovePhoto(uri)} style={styles.removePhoto} accessibilityRole="button" accessibilityLabel="Remove photo">
-                      <Ionicons name="close" size={14} color="#fff" />
-                    </Pressable>
-                  </View>
-                ))}
-                {photos.length < MAX_PHOTOS && (
-                  <Pressable onPress={onAddPhotos} style={styles.addPhotoButton} accessibilityRole="button">
-                    <Ionicons name="camera-outline" size={22} color={colors.green} />
-                    <Text style={styles.addPhotoText}>Add photos</Text>
-                  </Pressable>
-                )}
-              </View>
-              <Text style={styles.photoHint}>New photos are reviewed before they appear to others.</Text>
-            </View>
           </ScrollView>
 
           <View style={styles.modalActions}>
@@ -455,11 +392,6 @@ function HelpItem({ item, index, onEdit, onStop, onChat }: { item: HelpFeedItem;
           ))}
         </View>
         {item.description && <Text style={styles.body}>{item.description}</Text>}
-        {item.photos && item.photos.length > 0 && (
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.listingPhotos}>
-            {item.photos.map((uri) => <Image key={uri} source={{ uri }} style={styles.listingPhoto} />)}
-          </ScrollView>
-        )}
         {item.isMine ? (
           <View style={styles.offerActions}>
             <Button icon="create-outline" label="Edit offering" color={colors.green} outline onPress={() => onEdit?.(item)} />
@@ -521,12 +453,7 @@ const styles = StyleSheet.create({
   fieldGroup: { gap: 2 },
   descriptionInput: { minHeight: 92, backgroundColor: colors.bg, borderColor: colors.border, borderWidth: 1, borderRadius: radius.md, paddingHorizontal: 12, paddingVertical: 10, color: colors.text, fontSize: 14 },
   characterCount: { alignSelf: 'flex-end', color: colors.textDim, fontSize: 11, marginTop: 4 },
-  photoRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 9 },
-  photoWrap: { position: 'relative' },
-  photoPreview: { width: 76, height: 76, borderRadius: radius.md, backgroundColor: colors.bg },
-  removePhoto: { position: 'absolute', right: -5, top: -5, width: 23, height: 23, borderRadius: 12, backgroundColor: colors.text, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: colors.card },
-  addPhotoButton: { width: 100, height: 76, borderRadius: radius.md, borderWidth: 1, borderColor: colors.green, borderStyle: 'dashed', alignItems: 'center', justifyContent: 'center', gap: 4, backgroundColor: colors.greenSoft },
-  addPhotoText: { color: colors.green, fontSize: 12, fontWeight: '700' },
+  mapLocationActionText: { color: colors.green, fontSize: 12, fontWeight: '700' },
   photoHint: { color: colors.textDim, fontSize: 11, marginTop: 6 },
   locationButton: { minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: 8, borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, paddingHorizontal: 12 },
   locationRow: { minHeight: 44, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, paddingHorizontal: 12 },
@@ -554,7 +481,5 @@ const styles = StyleSheet.create({
   messageInput: { flex: 1, maxHeight: 100, minHeight: 44, backgroundColor: colors.bg, borderColor: colors.border, borderWidth: 1, borderRadius: 20, paddingHorizontal: 14, paddingVertical: 10, color: colors.text, fontSize: 14 },
   sendButton: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.blue },
   sendButtonDisabled: { opacity: 0.45 },
-  listingPhotos: { gap: 8, paddingVertical: 2 },
-  listingPhoto: { width: 88, height: 72, borderRadius: radius.md, backgroundColor: colors.bg },
   offerActions: { gap: 8 },
 });

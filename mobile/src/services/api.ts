@@ -41,7 +41,6 @@ export type HelpFeedItem = {
   distance: string;
   tags: string[];
   description?: string;
-  photos?: string[];
   isMine?: boolean;
   status: string;
   createdAt: string;
@@ -147,10 +146,6 @@ function post(path: string, body: unknown, authenticated = true) {
   return request(path, { method: 'POST', body: JSON.stringify(body) }, authenticated);
 }
 
-function resolveHelpFeedPhotos(items: HelpFeedItem[]) {
-  return items.map((item) => ({ ...item, photos: item.photos?.map((photo) => new URL(photo, `${API_BASE_URL}/`).toString()) }));
-}
-
 export const api = {
   async login(input: { id: string }) {
     try {
@@ -171,13 +166,12 @@ export const api = {
 
   me: () => request<{ user: ApiUser }>('/auth/me'),
   getMap: () => request<MapSnapshot>('/map'),
-  getHelpFeed: async () => resolveHelpFeedPhotos(await request<HelpFeedItem[]>('/help-feed')),
-  getOffers: async () => resolveHelpFeedPhotos(await request<HelpOffer[]>('/offers')) as HelpOffer[],
+  getHelpFeed: () => request<HelpFeedItem[]>('/help-feed'),
+  getOffers: () => request<HelpOffer[]>('/offers'),
 
   createOffer: (input: CreateOfferInput) => post('/offers', input) as Promise<HelpOffer>,
   updateOffer: (offerId: string, input: UpdateOfferInput) => request<HelpOffer>(`/offers/${encodeURIComponent(offerId)}`, { method: 'PATCH', body: JSON.stringify(input) }),
   stopOffering: (offerId: string) => request<HelpOffer>(`/offers/${encodeURIComponent(offerId)}`, { method: 'PATCH', body: JSON.stringify({ status: 'withdrawn' }) }),
-  uploadOfferPhoto: (offerId: string, dataUrl: string) => post(`/offers/${encodeURIComponent(offerId)}/attachments`, { data: dataUrl }),
 
   getHelpRequests: (kind?: 'resource' | 'emergency' | 'event') => request<HelpRequest[]>(`/help-requests${kind ? `?kind=${encodeURIComponent(kind)}` : ''}`),
   createHelpRequest: (input: CreateHelpRequestInput) => post('/help-requests', input) as Promise<HelpRequest>,
