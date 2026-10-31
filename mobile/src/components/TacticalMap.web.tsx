@@ -5,7 +5,6 @@ import { StyleSheet, View } from 'react-native';
 import L from 'leaflet';
 import { Circle, MapContainer, Marker, Polyline, TileLayer, useMap } from 'react-leaflet';
 import { MapPlaceChooser } from '@/components/MapPlaceChooser';
-import { CurrentLocationButton } from '@/components/CurrentLocationButton';
 import mock from '@/data/mock.json';
 import { incidentColors } from '@/icons';
 import { colors } from '@/theme';
@@ -62,7 +61,6 @@ function Camera({ shelling, sos, route, incidents, selectedId, userLocation = mo
 export function TacticalMap(props: TacticalMapProps) {
   const [tileUnavailable, setTileUnavailable] = useState(false);
   const [placeChoices, setPlaceChoices] = useState<MapPlaceItem[] | null>(null);
-  const [currentLocation, setCurrentLocation] = useState<LatLng | null>(null);
   const { shelling, sos, route, showBasement, showCommunityReports = true, incidents, selectedId, onSelect, dangerZones = [], emergencySites = [], nearbyPeople = [], helpOffers = [], plannedRoute, userLocation = mock.me, onSelectDanger, onSelectSite, onSelectOffer } = props;
   const placeGroups = groupMapPlaces([
     ...incidents.flatMap((incident) => {
@@ -99,7 +97,6 @@ export function TacticalMap(props: TacticalMapProps) {
           />
         )}
         <Camera {...props} />
-        <UserLocationCamera coordinate={currentLocation} />
 
         {showCommunityReports && incidents.map((incident) => {
           const pos = incidentPoint(incident);
@@ -185,7 +182,7 @@ export function TacticalMap(props: TacticalMapProps) {
         )}
 
         <Marker
-          position={ll(currentLocation ?? userLocation)}
+          position={ll(userLocation)}
           zIndexOffset={1000}
           icon={icon(
             `<div class="m-me ${sos ? 'sos' : ''}" style="--c:${sos ? colors.red : colors.blue}">⌖<div class="m-label">${sos ? 'SOS · your location' : 'YOU · your location'}</div></div>`,
@@ -193,18 +190,9 @@ export function TacticalMap(props: TacticalMapProps) {
           )}
         />
       </MapContainer>
-      <CurrentLocationButton onLocation={setCurrentLocation} />
       <MapPlaceChooser visible={placeChoices !== null} items={placeChoices ?? []} onChoose={choosePlace} onClose={() => setPlaceChoices(null)} />
     </View>
   );
-}
-
-function UserLocationCamera({ coordinate }: { coordinate: LatLng | null }) {
-  const map = useMap();
-  useEffect(() => {
-    if (coordinate) map.flyTo(ll(coordinate), 15, { duration: 0.8 });
-  }, [coordinate, map]);
-  return null;
 }
 
 function dangerColor(zone: DangerZone) {

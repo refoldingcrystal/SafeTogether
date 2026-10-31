@@ -6,6 +6,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
 import { TacticalMap } from '@/components/TacticalMap';
 import { CoordinationChat, type CoordinationRequest } from '@/components/CoordinationChat';
+import { CurrentLocationButton } from '@/components/CurrentLocationButton';
 import { Button, Card, NeedHelpButton } from '@/components/ui';
 import mock from '@/data/mock.json';
 import { offlineDemoPlaces, offlineDemoRoads } from '@/data/offlineMapDemo';
@@ -49,6 +50,7 @@ export default function MapScreen() {
   const [helpOffers, setHelpOffers] = useState<MapHelpOffer[]>(demonstrationHelpOffers);
   const [allIncidents, setAllIncidents] = useState(demonstrationIncidents);
   const [mapLocation, setMapLocation] = useState<Coordinate>(mock.me);
+  const [currentLocationOverride, setCurrentLocationOverride] = useState<Coordinate | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [activeIncidentId, setActiveIncidentId] = useState<string | null>(null);
   const [markingSafe, setMarkingSafe] = useState(false);
@@ -281,7 +283,7 @@ export default function MapScreen() {
         dangerZones={dangerZones}
         emergencySites={sites}
         nearbyPeople={mapNearbyPeople}
-        userLocation={app.offlineSource === 'demo' ? mock.me : mapLocation}
+        userLocation={currentLocationOverride ?? (app.offlineSource === 'demo' ? mock.me : mapLocation)}
         helpOffers={helpOffers}
         plannedRoute={safeRoute?.coordinates}
         destination={customDestination ?? undefined}
@@ -367,16 +369,16 @@ export default function MapScreen() {
         )}
       </View>
 
-      <Pressable onPress={() => router.push('/account')} accessibilityRole="button" accessibilityLabel="Account" style={styles.accountButton}>
-        <Ionicons name="person-circle-outline" size={26} color={colors.text} />
-      </Pressable>
-
       <View style={styles.bottom} pointerEvents="box-none">
-        {!app.sos && (
-          <View style={styles.sosRow} pointerEvents="box-none">
-            <NeedHelpButton onPress={openHelpMenu} />
+        <View style={styles.sosRow} pointerEvents="box-none">
+          {!app.sos ? <NeedHelpButton onPress={openHelpMenu} /> : <View style={styles.helpButtonPlaceholder} />}
+          <View style={styles.mapActions}>
+            <CurrentLocationButton onLocation={(coordinate) => { setMapLocation(coordinate); setCurrentLocationOverride(coordinate); }} />
+            <Pressable onPress={() => router.push('/account')} accessibilityRole="button" accessibilityLabel="Account" style={styles.accountButton}>
+              <Ionicons name="person-circle-outline" size={26} color={colors.text} />
+            </Pressable>
           </View>
-        )}
+        </View>
         <BottomCard
           selectedIncident={allIncidents.find((incident) => incident.id === selectedId)}
           selectedDanger={dangerZones.find((zone) => zone.id === selectedDangerId)}
@@ -752,7 +754,7 @@ function Info({ icon, text }: { icon: keyof typeof Ionicons.glyphMap; text: stri
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
-  accountButton: { position: 'absolute', top: 12, right: 12, width: 42, height: 42, alignItems: 'center', justifyContent: 'center', borderRadius: 21, backgroundColor: colors.card },
+  accountButton: { width: 42, height: 42, alignItems: 'center', justifyContent: 'center', borderRadius: 21, backgroundColor: colors.card },
   mapTools: { position: 'absolute', top: 12, left: 12, right: 62, gap: 5, zIndex: 120 },
   offlineNotice: { alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', gap: 6, borderRadius: radius.pill, paddingHorizontal: 11, paddingVertical: 6, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.orange },
   offlineNoticeTitle: { color: colors.orange, fontSize: 12, fontWeight: '800' },
@@ -765,7 +767,9 @@ const styles = StyleSheet.create({
   routeError: { color: colors.red, fontSize: 12, fontWeight: '700' },
   dangerInstruction: { fontSize: 13, fontWeight: '800' },
   bottom: { position: 'absolute', left: 0, right: 0, bottom: 0, padding: 12 },
-  sosRow: { alignItems: 'flex-start', marginBottom: 4 },
+  sosRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 },
+  mapActions: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  helpButtonPlaceholder: { width: 68, height: 68 },
   helpPage: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, backgroundColor: colors.bg },
   helpContent: { padding: 20, paddingBottom: 40, gap: 12 },
   helpHeader: { flexDirection: 'row', alignItems: 'flex-start', gap: 12 },

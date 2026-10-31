@@ -1,7 +1,6 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { Platform, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { CurrentLocationButton } from '@/components/CurrentLocationButton';
 import { MapPlaceChooser } from '@/components/MapPlaceChooser';
 import MapView, { Circle, Marker, Polyline, UrlTile } from 'react-native-maps';
 import { Paths } from 'expo-file-system';
@@ -78,7 +77,6 @@ export function TacticalMap({
   onDestinationLongPress,
 }: TacticalMapProps) {
   const map = useRef<MapView>(null);
-  const [currentLocation, setCurrentLocation] = useState<Coordinate | null>(null);
   const [placeChoices, setPlaceChoices] = useState<MapPlaceItem[] | null>(null);
   const selected = useMemo(() => incidents.find((incident) => incident.id === selectedId), [incidents, selectedId]);
   const placeGroups = useMemo(() => {
@@ -240,7 +238,7 @@ export function TacticalMap({
             <View style={[styles.authorityMarker, { backgroundColor: authority.color }]}><Text style={styles.authorityLabel}>{authority.label}</Text></View>
           </Marker>
         ))}
-        <Marker coordinate={currentLocation ?? userLocation} anchor={{ x: 0.5, y: 0.5 }} zIndex={100} tracksViewChanges={false}>
+        <Marker coordinate={userLocation} anchor={{ x: 0.5, y: 0.5 }} zIndex={100} tracksViewChanges={false}>
           <View style={styles.myLocationMarker}>
             <View style={[styles.locationAccuracyRing, sos && styles.locationAccuracyRingSos]} />
             <View style={[styles.meMarker, sos && styles.meMarkerSos]}><Ionicons name={sos ? 'radio' : 'locate'} size={16} color="#fff" /></View>
@@ -248,10 +246,6 @@ export function TacticalMap({
           </View>
         </Marker>
       </MapView>
-      <CurrentLocationButton onLocation={(coordinate) => {
-        setCurrentLocation(coordinate);
-        map.current?.animateToRegion(regionAround(coordinate), 650);
-      }} />
       <MapPlaceChooser visible={placeChoices !== null} items={placeChoices ?? []} onChoose={choosePlace} onClose={() => setPlaceChoices(null)} />
       <View pointerEvents="none" style={styles.attribution}><Text style={styles.attributionText}>© OpenStreetMap contributors</Text></View>
     </View>

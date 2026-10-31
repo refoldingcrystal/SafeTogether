@@ -40,5 +40,5 @@ export function CurrentLocationButton({ onLocation }: { onLocation: (location: C
 }
 
 const styles = StyleSheet.create({
-  button: { position: 'absolute', zIndex: 1600, top: 62, right: 12, width: 42, height: 42, borderRadius: 21, backgroundColor: colors.card, alignItems: 'center', justifyContent: 'center', ...shadow },
+  button: { width: 42, height: 42, borderRadius: 21, backgroundColor: colors.card, alignItems: 'center', justifyContent: 'center', ...shadow },
 });
