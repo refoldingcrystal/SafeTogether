@@ -197,7 +197,7 @@ export function TacticalMap(props: TacticalMapProps) {
         />
       </MapContainer>
       <CurrentLocationButton onLocation={setCurrentLocation} />
-      {placeChoices && <MapPlaceChooser items={placeChoices} onChoose={choosePlace} onClose={() => setPlaceChoices(null)} />}
+      <MapPlaceChooser visible={placeChoices !== null} items={placeChoices ?? []} onChoose={choosePlace} onClose={() => setPlaceChoices(null)} />
       {selectedOffer && <HelpOfferMapPopup offer={selectedOffer} onClose={() => setSelectedOfferId(null)} />}
       {!tileUrl && <View pointerEvents="none" style={styles.tileNotice}><Text style={styles.tileNoticeText}>Basemap provider not configured · demonstration overlays only</Text></View>}
       {tileUrl && tileUnavailable && <View pointerEvents="none" style={styles.tileNotice}><Text style={styles.tileNoticeText}>Basemap unavailable · demonstration overlays only</Text></View>}

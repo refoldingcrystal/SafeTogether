@@ -240,7 +240,7 @@ export function TacticalMap({
         setCurrentLocation(coordinate);
         map.current?.animateToRegion(regionAround(coordinate), 650);
       }} />
-      {placeChoices && <MapPlaceChooser items={placeChoices} onChoose={choosePlace} onClose={() => setPlaceChoices(null)} />}
+      <MapPlaceChooser visible={placeChoices !== null} items={placeChoices ?? []} onChoose={choosePlace} onClose={() => setPlaceChoices(null)} />
       {selectedOffer && <HelpOfferMapPopup offer={selectedOffer} onClose={() => setSelectedOfferId(null)} />}
       <View pointerEvents="none" style={styles.attribution}><Text style={styles.attributionText}>© OpenStreetMap contributors</Text></View>
     </View>

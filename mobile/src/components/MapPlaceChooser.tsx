@@ -4,13 +4,14 @@ import type { MapPlaceItem } from '@/shared/mapPlaces';
 
 const kindLabel = { incident: 'REPORT', danger: 'DANGER', site: 'SAFE POINT', offer: 'OFFER' } as const;
 
-export function MapPlaceChooser({ items, onChoose, onClose }: {
+export function MapPlaceChooser({ visible, items, onChoose, onClose }: {
+  visible: boolean;
   items: MapPlaceItem[];
   onChoose: (item: MapPlaceItem) => void;
   onClose: () => void;
 }) {
   return (
-    <Modal visible transparent animationType="fade" statusBarTranslucent onRequestClose={onClose}>
+    <Modal visible={visible} transparent animationType="fade" statusBarTranslucent onRequestClose={onClose}>
       <View style={styles.modalRoot}>
         <Pressable style={styles.scrim} onPress={onClose} accessibilityRole="button" accessibilityLabel="Close map item chooser" />
         <View style={styles.popup} accessibilityLabel="Choose a map item" accessibilityViewIsModal>
