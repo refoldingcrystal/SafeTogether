@@ -177,8 +177,8 @@ export const api = {
   createHelpRequest: (input: CreateHelpRequestInput) => post('/help-requests', input) as Promise<HelpRequest>,
   updateHelpRequest: (requestId: string, input: { status?: 'active' | 'resolved' | 'withdrawn' | 'expired'; title?: string; description?: string; approximateLocation?: ApproximateLocation | string | null }) =>
     request<HelpRequest>(`/help-requests/${encodeURIComponent(requestId)}`, { method: 'PATCH', body: JSON.stringify(input) }),
-  getMessages: (requestId: string) => request<HelpMessage[]>(`/help-requests/${encodeURIComponent(requestId)}/messages`),
-  sendMessage: (requestId: string, text: string) => post(`/help-requests/${encodeURIComponent(requestId)}/messages`, { text }) as Promise<HelpMessage>,
+  getMessages: (requestId: string) => request<HelpMessage[]>(`/conversations/${encodeURIComponent(requestId)}/messages`),
+  sendMessage: (requestId: string, text: string) => post(`/conversations/${encodeURIComponent(requestId)}/messages`, { text }) as Promise<HelpMessage>,
 
   getIncidents: () => request<ApiIncident[]>('/incidents'),
   createIncident: (input: { category: PersonalHelpCategory; description?: string; approximateLocation: ApproximateLocation | string; shareWithAuthorities?: boolean }) => request<{ id: string }>('/incidents', { method: 'POST', body: JSON.stringify(input) }),

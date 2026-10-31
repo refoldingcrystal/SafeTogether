@@ -345,6 +345,7 @@ function HelpItem({ item, index, onEdit, onStop, onChat }: { item: HelpFeedItem;
           <View style={styles.offerActions}>
             <Button icon="create-outline" label="Edit offering" color={colors.green} outline onPress={() => onEdit?.(item)} />
             <Button icon="close-circle-outline" label="Stop offering" color={colors.red} outline onPress={() => onStop?.(item.id)} />
+            <Button icon="chatbubble-ellipses" label="Chat" color={colors.blue} outline onPress={() => onChat?.(item)} />
           </View>
         ) : !offer && !item.isMine ? (
           <Button icon="chatbubble-ellipses" label="Chat" color={colors.blue} onPress={() => onChat?.(item)} />
