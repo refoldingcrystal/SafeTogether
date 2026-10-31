@@ -32,9 +32,9 @@ export const incidentCategories: PersonalHelpCategory[] = ['Injured', 'Stranded'
 export const helpCategories: HelpCategory[] = ['Shelter', 'Food and water', 'Transport', 'Qualified first aid', 'Supplies', 'Other practical help'];
 
 export const demonstrationIncidents: Incident[] = [
-  { id: 'ST-2044', category: 'Injured', description: 'Needs first aid after a fall.', approximateLocation: { label: 'Central district', precision: 'neighborhood', latitude: 52.2335, longitude: 21.0005 }, submittedAt: '4 min ago', updatedAt: '4 min ago', source: 'community', verificationStatus: 'unverified', incidentStatus: 'new' },
-  { id: 'ST-2041', category: 'Stranded', description: 'Needs safe transport to a nearby shelter.', approximateLocation: { label: 'Riverside district', precision: 'district', latitude: 52.2395, longitude: 21.0305 }, submittedAt: '12 min ago', updatedAt: '12 min ago', source: 'community', verificationStatus: 'verified', incidentStatus: 'verified' },
-  { id: 'ST-2038', category: 'Lost', description: 'Separated from family and needs help reconnecting.', approximateLocation: { label: 'North park area', precision: 'landmark', latitude: 52.2465, longitude: 21.0045 }, submittedAt: '28 min ago', updatedAt: '28 min ago', source: 'community', verificationStatus: 'awaiting_review', incidentStatus: 'under_review' },
+  { id: 'ST-2044', category: 'Injured', description: 'Needs first aid after a fall.', approximateLocation: { label: 'Central district', precision: 'neighborhood', latitude: 52.2335, longitude: 21.0005 }, submittedAt: '4 min ago', updatedAt: '4 min ago', source: 'community', verificationStatus: 'unverified' },
+  { id: 'ST-2041', category: 'Stranded', description: 'Needs safe transport to a nearby shelter.', approximateLocation: { label: 'Riverside district', precision: 'district', latitude: 52.2395, longitude: 21.0305 }, submittedAt: '12 min ago', updatedAt: '12 min ago', source: 'community', verificationStatus: 'verified' },
+  { id: 'ST-2038', category: 'Lost', description: 'Separated from family and needs help reconnecting.', approximateLocation: { label: 'North park area', precision: 'landmark', latitude: 52.2465, longitude: 21.0045 }, submittedAt: '28 min ago', updatedAt: '28 min ago', source: 'community', verificationStatus: 'unverified' },
 ];
 
 export const demonstrationNotice: OfficialNotice = {

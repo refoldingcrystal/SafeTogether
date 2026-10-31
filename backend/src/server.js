@@ -29,6 +29,12 @@ async function init() {
   await mkdir(UPLOAD_DIR, { recursive: true });
   try { db = { ...emptyDb(), ...JSON.parse(await readFile(DB_FILE, 'utf8')) }; }
   catch (error) { if (error.code !== 'ENOENT') throw error; await persist(); }
+  let incidentsMigrated = false;
+  for (const incident of db.incidents) {
+    if (incident.status === 'new') { incident.status = 'under_review'; incidentsMigrated = true; }
+    if (incident.verificationStatus === 'awaiting_review') { incident.verificationStatus = 'unverified'; incidentsMigrated = true; }
+  }
+  if (incidentsMigrated) await persist();
   const authorityLoginId = clean(process.env.SAFETOGETHER_AUTHORITY_ID, 100);
   if (authorityLoginId && !findByLoginId(authorityLoginId)) {
     const user = { id: id('usr'), name: authorityLoginId, role: 'authority', loginId: authorityLoginId, createdAt: now() };
@@ -312,7 +318,7 @@ async function route(req, res) {
     const body = await readBody(req); const category = clean(body.category, 60); const description = clean(body.description, 1000);
     if (!PERSONAL_HELP_CATEGORIES.includes(category)) throw fail(400, 'Incident category must describe personal assistance: Injured, Stranded, Lost, or Other personal assistance');
     if (!category || description.length < 5) throw fail(400, 'Category and description (at least 5 characters) are required');
-    const row = { id: id('inc'), category, description, approximateLocation: approximate(body.approximateLocation), submittedAt: now(), updatedAt: now(), source: 'community', verificationStatus: 'awaiting_review', status: 'new', reporterId: user.id, attachments: [], shareWithAuthorities: body.shareWithAuthorities !== false };
+    const row = { id: id('inc'), category, description, approximateLocation: approximate(body.approximateLocation), submittedAt: now(), updatedAt: now(), source: 'community', verificationStatus: 'unverified', status: 'under_review', reporterId: user.id, attachments: [], shareWithAuthorities: body.shareWithAuthorities !== false };
     db.incidents.unshift(row); audit(user.id, 'incident_submitted', 'incident', row.id); await persist();
     return send(res, 201, { data: { id: row.id, category, description, approximateLocation: row.approximateLocation, submittedAt: row.submittedAt, status: row.status, verificationStatus: row.verificationStatus } });
   }
@@ -327,7 +333,7 @@ async function route(req, res) {
   if (resource === 'incidents' && method === 'PATCH' && recordId && user.role === 'authority') {
     const row = db.incidents.find((x) => x.id === recordId); if (!row) throw fail(404, 'Incident not found');
     const body = await readBody(req);
-    if (['new','under_review','verified','assigned','in_progress','resolved','rejected'].includes(body.status)) { row.status = body.status; row.verificationStatus = body.status === 'verified' ? 'verified' : body.status === 'rejected' ? 'rejected' : row.verificationStatus; }
+    if (['under_review','verified','assigned','in_progress','resolved','rejected'].includes(body.status)) { row.status = body.status; row.verificationStatus = body.status === 'verified' ? 'verified' : body.status === 'rejected' ? 'rejected' : row.verificationStatus; }
     if (Array.isArray(body.approvedAttachmentIds)) for (const a of row.attachments) a.approved = body.approvedAttachmentIds.includes(a.id);
     row.updatedAt = now(); audit(user.id, 'incident_updated', 'incident', row.id, { status: row.status }); await persist(); return send(res, 200, { data: row });
   }

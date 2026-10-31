@@ -7,7 +7,7 @@ import * as Location from 'expo-location';
 import * as ImagePicker from 'expo-image-picker';
 import { TacticalMap } from '@/components/TacticalMap';
 import { ApproximateLocationPicker } from '@/components/ApproximateLocationPicker';
-import { Button, Card, NeedHelpButton, StatusBadge } from '@/components/ui';
+import { Button, Card, NeedHelpButton } from '@/components/ui';
 import mock from '@/data/mock.json';
 import { categoryIcons, incidentColors, incidentGuide } from '@/icons';
 import { demonstrationDangerZones, demonstrationHelpOffers, demonstrationIncidents, emergencySites, nearbyPeople, type Coordinate, type DangerZone, type EmergencySite, type MapHelpOffer } from '@/shared/demo';
@@ -67,7 +67,6 @@ export default function MapScreen() {
         updatedAt: item.updatedAt,
         source: item.source,
         verificationStatus: item.verificationStatus,
-        incidentStatus: item.status,
       })));
     }).catch(() => {
       if (!active) return;
@@ -153,7 +152,7 @@ export default function MapScreen() {
         setDangerZones(withDemonstrationHazards(snapshot.dangerZones));
         const mapSites = withDemonstrationSites(toMapSites(snapshot));
         setSites(mapSites);
-        setAllIncidents(snapshot.incidents.map((item) => ({ id: item.id, category: item.category, description: item.description, approximateLocation: item.approximateLocation, submittedAt: item.submittedAt, updatedAt: item.updatedAt, source: item.source, verificationStatus: item.verificationStatus, incidentStatus: item.status })));
+        setAllIncidents(snapshot.incidents.map((item) => ({ id: item.id, category: item.category, description: item.description, approximateLocation: item.approximateLocation, submittedAt: item.submittedAt, updatedAt: item.updatedAt, source: item.source, verificationStatus: item.verificationStatus })));
       } catch { /* The submission succeeded; keep the currently loaded map. */ }
       if (photoUploadFailed) Alert.alert('Report sent', 'Your report was received, but one or more photos could not be uploaded.');
     } catch (error) {
@@ -479,10 +478,6 @@ function BottomCard({
             </Pressable>
           </View>
           <Text style={styles.body}>{incident.description}</Text>
-          <View style={styles.row}>
-            <StatusBadge status={incident.verificationStatus} />
-            <Info icon="information-circle" text={incident.incidentStatus.replace('_', ' ')} />
-          </View>
           <View style={styles.row}>
             <Info icon="location" text={`Approx. ${incident.approximateLocation.label}`} />
             <Info icon="time" text={formatIncidentTime(incident.submittedAt)} />
