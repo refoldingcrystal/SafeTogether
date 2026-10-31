@@ -6,19 +6,20 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
 import * as ImagePicker from 'expo-image-picker';
 import { TacticalMap } from '@/components/TacticalMap';
+import { ApproximateLocationPicker } from '@/components/ApproximateLocationPicker';
 import { Button, Card, NeedHelpButton, StatusBadge } from '@/components/ui';
 import mock from '@/data/mock.json';
 import { categoryIcons, incidentColors, incidentGuide } from '@/icons';
 import { demonstrationDangerZones, demonstrationHelpOffers, demonstrationIncidents, emergencySites, nearbyPeople, type Coordinate, type DangerZone, type EmergencySite, type MapHelpOffer } from '@/shared/demo';
 import { api, type MapSnapshot } from '@/services/api';
+import type { ApproximateLocation, Incident, PersonalHelpCategory } from '@/shared/models';
 import { requestSafeRoadRoute, type SafeRoute } from '@/shared/routing';
 import { useApp } from '@/state/app';
 import { colors, radius } from '@/theme';
 
-type HelpKind = 'Emergency' | 'Report an event' | 'Request resources';
+type HelpKind = 'Emergency' | 'Request resources';
 const helpKinds: Record<HelpKind, string[]> = {
-  Emergency: ['Medical emergency', 'Fire', 'Trapped person'],
-  'Report an event': ['Flooding', 'Riot or civil unrest', 'Armed conflict or shelling'],
+  Emergency: ['Injured', 'Stranded', 'Lost', 'Other personal assistance'],
   'Request resources': ['Food or water', 'Shelter', 'Transport'],
 };
 
@@ -35,13 +36,11 @@ export default function MapScreen() {
   const [helpKind, setHelpKind] = useState<HelpKind | null>(null);
   const [request, setRequest] = useState('');
   const [details, setDetails] = useState('');
-  const [location, setLocation] = useState('');
-  const [manualLocation, setManualLocation] = useState(false);
+  const [requestLocation, setRequestLocation] = useState<ApproximateLocation | null>(null);
   const [dangerZones, setDangerZones] = useState(demonstrationDangerZones);
   const [sites, setSites] = useState(emergencySites);
   const [helpOffers, setHelpOffers] = useState<MapHelpOffer[]>(demonstrationHelpOffers);
   const [allIncidents, setAllIncidents] = useState(demonstrationIncidents);
-  const [gps, setGps] = useState<{ latitude: number; longitude: number } | null>(null);
   const [mapLocation, setMapLocation] = useState<Coordinate>(mock.me);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -98,7 +97,7 @@ export default function MapScreen() {
     return () => { active = false; };
   }, []);
 
-  const incidents = useMemo(() => allIncidents.filter((incident) => incident.category !== 'Fire' && incident.category !== 'Flooding'), [allIncidents]);
+  const incidents = allIncidents;
   const nearestSafe = useMemo(() => nearestSafeSite(sites, mapLocation), [mapLocation, sites]);
   const mapNearbyPeople = useMemo(() => nearbyPeople.map((person) => ({
     ...person,
@@ -124,12 +123,10 @@ export default function MapScreen() {
   }
 
   async function submitHelpRequest() {
-    if (!helpKind || submitting) return;
+    if (!helpKind || !requestLocation || submitting) return;
     setSubmitting(true);
     setSubmitError(null);
-    const approximateLocation = gps
-      ? { label: location || 'Current location', ...gps, precision: 'neighborhood' as const }
-      : location || 'Location not shared';
+    const approximateLocation = requestLocation;
     let submitted = false;
     let photoUploadFailed = false;
     try {
@@ -137,7 +134,12 @@ export default function MapScreen() {
         await api.createHelpRequest({ kind: 'resource', title: request || undefined, categories: [request || 'Other practical help'], description: details, approximateLocation });
         submitted = true;
       } else {
-        const incident = await api.createIncident({ category: request || 'Other', description: details || request || helpKind, approximateLocation, shareWithAuthorities: true });
+        const personalCategories: PersonalHelpCategory[] = ['Injured', 'Stranded', 'Lost', 'Other personal assistance'];
+        const category: PersonalHelpCategory = personalCategories.includes(request as PersonalHelpCategory)
+          ? request as PersonalHelpCategory
+          : 'Other personal assistance';
+        const description = details.trim() || (category === 'Other personal assistance' && request.trim() ? request.trim() : `Needs help: ${category.toLowerCase()}`);
+        const incident = await api.createIncident({ category, description, approximateLocation, shareWithAuthorities: true });
         submitted = true;
         for (const photo of incidentPhotos) {
           try { await api.uploadIncidentPhoto(incident.id, photo.data); } catch { photoUploadFailed = true; }
@@ -181,18 +183,7 @@ export default function MapScreen() {
 
   async function openHelpMenu() {
     setHelpMenuOpen(true);
-    setManualLocation(false);
-    setGps(null);
-    setLocation('');
-    try {
-      const permission = await Location.requestForegroundPermissionsAsync();
-      if (permission.status !== 'granted') return;
-      const current = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
-      setGps({ latitude: current.coords.latitude, longitude: current.coords.longitude });
-      setLocation(`Approx. ${current.coords.latitude.toFixed(2)}, ${current.coords.longitude.toFixed(2)}`);
-    } catch {
-      setManualLocation(true);
-    }
+    setRequestLocation(null);
   }
 
   return (
@@ -202,6 +193,7 @@ export default function MapScreen() {
         sos={app.sos}
         route={app.route}
         showBasement={app.p2pReceived}
+        showCommunityReports
         offline={app.offline}
         dangerZones={dangerZones}
         emergencySites={sites}
@@ -249,7 +241,7 @@ export default function MapScreen() {
           </View>
         )}
         <BottomCard
-          selectedId={selectedId}
+          selectedIncident={allIncidents.find((incident) => incident.id === selectedId)}
           selectedDanger={dangerZones.find((zone) => zone.id === selectedDangerId)}
           selectedSite={sites.find((site) => site.id === selectedSiteId)}
           safeRoute={safeRoute}
@@ -287,16 +279,14 @@ export default function MapScreen() {
               <Pressable onPress={() => setHelpMenuOpen(false)} accessibilityRole="button" accessibilityLabel="Close help menu"><Ionicons name="close" size={24} color={colors.textMuted} /></Pressable>
             </View>
             {(Object.keys(helpKinds) as HelpKind[]).map((kind) => <Pressable key={kind} onPress={() => { setHelpKind(kind); setRequest(''); }} style={[styles.helpOption, helpKind === kind && styles.helpOptionActive]}><Text style={styles.optionTitle}>{kind}</Text><Text style={styles.optionDetail}>{helpKinds[kind].join(' · ')}</Text></Pressable>)}
-            {helpKind && <View style={styles.quickChoices}>{helpKinds[helpKind].map((example) => <Pressable key={example} onPress={() => setRequest(example)} style={[styles.quickChoice, request === example && styles.quickChoiceActive]}><Text style={styles.quickChoiceText}>{example}</Text></Pressable>)}<Pressable onPress={() => setRequest('')} style={styles.quickChoice}><Text style={styles.quickChoiceText}>Other</Text></Pressable></View>}
-            {helpKind && <TextInput value={request} onChangeText={setRequest} placeholder="Other request (optional)" placeholderTextColor={colors.textDim} style={styles.input} />}
-            <Text style={styles.kicker}>LOCATION</Text>
-            <View style={styles.locationChoices}><Button label="Use current location" icon="locate" color={colors.blue} outline onPress={() => { setManualLocation(false); void openHelpMenu(); }} /><Button label="Enter manually" color={colors.textMuted} outline onPress={() => { setManualLocation(true); setGps(null); setLocation(''); }} /></View>
-            {manualLocation ? <TextInput value={location} onChangeText={setLocation} placeholder="Neighbourhood or nearby landmark" placeholderTextColor={colors.textDim} style={styles.input} /> : <Text style={styles.muted}>{location || 'Finding your approximate location…'}</Text>}
-            <Text style={styles.kicker}>ADDITIONAL DETAILS (OPTIONAL)</Text><TextInput value={details} onChangeText={setDetails} placeholder="What happened or what do you need?" placeholderTextColor={colors.textDim} style={[styles.input, styles.detailsInput]} multiline textAlignVertical="top" />
+            {helpKind && <View style={styles.quickChoices}>{helpKinds[helpKind].map((example) => <Pressable key={example} onPress={() => setRequest(example)} style={[styles.quickChoice, request === example && styles.quickChoiceActive]}><Text style={styles.quickChoiceText}>{example}</Text></Pressable>)}</View>}
+            {helpKind && <TextInput value={request} onChangeText={setRequest} placeholder={helpKind === 'Emergency' ? 'Describe the help you need (optional)' : 'Other resource or request (optional)'} placeholderTextColor={colors.textDim} style={styles.input} />}
+            <ApproximateLocationPicker value={requestLocation} onChange={setRequestLocation} />
+            <Text style={styles.kicker}>ADDITIONAL DETAILS (OPTIONAL)</Text><TextInput value={details} onChangeText={setDetails} placeholder="What help do you need?" placeholderTextColor={colors.textDim} style={[styles.input, styles.detailsInput]} multiline textAlignVertical="top" />
             {helpKind !== 'Request resources' && <View style={styles.photoField}><Text style={styles.kicker}>PHOTOS (OPTIONAL · UP TO 3)</Text><Button label="Add photos" icon="image-outline" color={colors.blue} outline onPress={() => { void addIncidentPhotos(); }} /><View style={styles.photoRow}>{incidentPhotos.map((photo) => <Pressable key={photo.uri} onPress={() => setIncidentPhotos((current) => current.filter((item) => item.uri !== photo.uri))} accessibilityRole="button" accessibilityLabel="Remove photo"><Image source={{ uri: photo.uri }} style={styles.photoPreview} /></Pressable>)}</View></View>}
             <Text style={styles.disclaimer}>Your request will be shared with the SafeTogether community. Incident reports are also available to authorities. For immediate danger, call local emergency services.</Text>
             {submitError && <Text accessibilityRole="alert" style={styles.submitError}>{submitError}</Text>}
-            <Button label={submitting ? 'Sending…' : 'Send help request'} icon="send" disabled={!helpKind || submitting || !location} onPress={() => { void submitHelpRequest(); }} />
+            <Button label={submitting ? 'Sending…' : 'Send help request'} icon="send" disabled={!helpKind || submitting || !requestLocation} onPress={() => { void submitHelpRequest(); }} />
           </ScrollView>
         </View>
       )}
@@ -341,7 +331,7 @@ function distanceInKm(from: Coordinate, to: Coordinate) {
 }
 
 function BottomCard({
-  selectedId,
+  selectedIncident,
   selectedDanger,
   selectedSite,
   safeRoute,
@@ -353,7 +343,7 @@ function BottomCard({
   onCloseRoute,
   onClose,
 }: {
-  selectedId: string | null;
+  selectedIncident?: Incident;
   selectedDanger?: DangerZone;
   selectedSite?: EmergencySite;
   safeRoute: SafeRoute | null;
@@ -366,7 +356,7 @@ function BottomCard({
   onClose: () => void;
 }) {
   const app = useApp();
-  const incident = demonstrationIncidents.find((i) => i.id === selectedId);
+  const incident = selectedIncident;
 
   if (app.route === 'basement') {
     return (
@@ -491,9 +481,13 @@ function BottomCard({
           <Text style={styles.body}>{incident.description}</Text>
           <View style={styles.row}>
             <StatusBadge status={incident.verificationStatus} />
-            <Info icon="location" text={`approx. ${incident.approximateLocation.label}`} />
-            <Info icon="time" text={incident.submittedAt} />
+            <Info icon="information-circle" text={incident.incidentStatus.replace('_', ' ')} />
           </View>
+          <View style={styles.row}>
+            <Info icon="location" text={`Approx. ${incident.approximateLocation.label}`} />
+            <Info icon="time" text={formatIncidentTime(incident.submittedAt)} />
+          </View>
+          {incident.source === 'authority' && <Text style={styles.muted}>Submitted by an authority</Text>}
           {guide && <Button icon="book" label="Open safety guide" color={colors.blue} outline onPress={() => router.push(`/guide/${guide}`)} />}
         </Card>
       </Animated.View>
@@ -526,13 +520,17 @@ function siteColor(site: EmergencySite) {
   return site.kind === 'shelter' ? colors.green : site.kind === 'aid' ? colors.orange : colors.blue;
 }
 
+function formatIncidentTime(value: string) {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? value : date.toLocaleString();
+}
+
 function dangerAction(zone: DangerZone) {
   if (zone.kind === 'attack') return 'Take cover. Avoid the area.';
   if (zone.kind === 'fire') return 'Avoid smoke and leave room for responders.';
   if (zone.kind === 'flooding') return 'Do not cross this road or underpass.';
   return 'Avoid the area and follow police instructions.';
 }
-
 function Info({ icon, text }: { icon: keyof typeof Ionicons.glyphMap; text: string }) {
   return (
     <View style={styles.info}>
@@ -548,7 +546,7 @@ const styles = StyleSheet.create({
   routeError: { color: colors.red, fontSize: 12, fontWeight: '700' },
   dangerInstruction: { fontSize: 13, fontWeight: '800' },
   bottom: { position: 'absolute', left: 0, right: 0, bottom: 0, padding: 12 },
-  sosRow: { alignItems: 'center', marginBottom: 4 },
+  sosRow: { alignItems: 'flex-start', marginBottom: 4 },
   helpPage: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, backgroundColor: colors.bg },
   helpContent: { padding: 20, paddingBottom: 40, gap: 12 },
   helpHeader: { flexDirection: 'row', alignItems: 'flex-start', gap: 12 },
@@ -560,7 +558,6 @@ const styles = StyleSheet.create({
   quickChoice: { borderWidth: 1, borderColor: colors.border, borderRadius: radius.pill, paddingHorizontal: 12, paddingVertical: 8 },
   quickChoiceActive: { borderColor: colors.blue, backgroundColor: colors.blueSoft },
   quickChoiceText: { color: colors.textMuted, fontSize: 12, fontWeight: '700' },
-  locationChoices: { flexDirection: 'row', gap: 8 },
   input: { minHeight: 46, borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, backgroundColor: colors.bg, color: colors.text, paddingHorizontal: 12, paddingVertical: 10, fontSize: 15 },
   detailsInput: { minHeight: 92 },
   disclaimer: { color: colors.orange, backgroundColor: colors.orangeSoft, borderRadius: radius.md, padding: 10, fontSize: 12, fontWeight: '600', lineHeight: 17 },

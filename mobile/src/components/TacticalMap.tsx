@@ -1,12 +1,16 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { Platform, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { CurrentLocationButton } from '@/components/CurrentLocationButton';
+import { HelpOfferMapPopup } from '@/components/HelpOfferMapPopup';
+import { MapPlaceChooser } from '@/components/MapPlaceChooser';
 import MapView, { Circle, Marker, Polyline, UrlTile } from 'react-native-maps';
 import mock from '@/data/mock.json';
 import { categoryIcons, incidentColors } from '@/icons';
 import type { Incident } from '@/shared/models';
 import type { Coordinate, DangerZone, EmergencySite, MapHelpOffer, NearbyPerson } from '@/shared/demo';
 import type { Route } from '@/state/app';
+import { groupMapPlaces, type MapPlaceItem } from '@/shared/mapPlaces';
 import { colors, shadow } from '@/theme';
 
 export type TacticalMapProps = {
@@ -53,7 +57,7 @@ export function TacticalMap({
   sos,
   route,
   showBasement,
-  showCommunityReports = false,
+  showCommunityReports = true,
   offline = false,
   dangerZones = [],
   emergencySites = [],
@@ -70,13 +74,35 @@ export function TacticalMap({
   onDestinationLongPress,
 }: TacticalMapProps) {
   const map = useRef<MapView>(null);
+  const [currentLocation, setCurrentLocation] = useState<Coordinate | null>(null);
   const [selectedOfferId, setSelectedOfferId] = useState<string | null>(null);
+  const [placeChoices, setPlaceChoices] = useState<MapPlaceItem[] | null>(null);
   const selected = useMemo(() => incidents.find((incident) => incident.id === selectedId), [incidents, selectedId]);
   const nearby = useMemo(
     () => nearbyOffsets.map((point) => ({ latitude: userLocation.latitude + point.latitude - mock.me.latitude, longitude: userLocation.longitude + point.longitude - mock.me.longitude })),
     [userLocation.latitude, userLocation.longitude],
   );
   const selectedOffer = helpOffers.find((offer) => offer.id === selectedOfferId);
+  const placeGroups = useMemo(() => {
+    const items: MapPlaceItem[] = [];
+    incidents.forEach((incident) => {
+      const coordinate = incidentPoint(incident);
+      if (coordinate) items.push({ key: `incident:${incident.id}`, kind: 'incident', id: incident.id, title: incident.category, coordinate });
+    });
+    dangerZones.forEach((zone) => items.push({ key: `danger:${zone.id}`, kind: 'danger', id: zone.id, title: zone.title, coordinate: zone.coordinate }));
+    emergencySites.forEach((site) => items.push({ key: `site:${site.id}`, kind: 'site', id: site.id, title: site.title, coordinate: site.coordinate }));
+    helpOffers.forEach((offer) => items.push({ key: `offer:${offer.id}`, kind: 'offer', id: offer.id, title: offer.title, coordinate: offer.coordinate }));
+    return groupMapPlaces(items);
+  }, [dangerZones, emergencySites, helpOffers, incidents]);
+  const groupedKeys = useMemo(() => new Set(placeGroups.flatMap((group) => group.items.map((item) => item.key))), [placeGroups]);
+
+  function choosePlace(item: MapPlaceItem) {
+    setPlaceChoices(null);
+    if (item.kind === 'incident') onSelect(item.id);
+    else if (item.kind === 'danger') onSelectDanger?.(item.id);
+    else if (item.kind === 'site') onSelectSite?.(item.id);
+    else setSelectedOfferId(item.id);
+  }
 
   useEffect(() => {
     const selectedPoint = selected ? incidentPoint(selected) : null;
@@ -121,11 +147,11 @@ export function TacticalMap({
           return (
             <Fragment key={incident.id}>
               <Circle center={coordinate} radius={precisionRadius[incident.approximateLocation.precision]} strokeColor={color} strokeWidth={isSelected ? 2.5 : 1.25} fillColor={`${color}20`} zIndex={1} />
-              <Marker coordinate={coordinate} onPress={() => onSelect(incident.id)} zIndex={isSelected ? 50 : 10}>
+              {!groupedKeys.has(`incident:${incident.id}`) && <Marker coordinate={coordinate} onPress={() => onSelect(incident.id)} zIndex={isSelected ? 50 : 10}>
                 <View style={[styles.incidentMarker, { backgroundColor: color }, isSelected && styles.incidentMarkerSelected]}>
                   <Ionicons name={categoryIcons[incident.category] ?? 'alert'} size={16} color="#fff" />
                 </View>
-              </Marker>
+              </Marker>}
             </Fragment>
           );
         })}
@@ -138,12 +164,12 @@ export function TacticalMap({
               {[1, 0.7, 0.42].map((factor) => (
                 <Circle key={factor} center={zone.coordinate} radius={zone.radius * factor} strokeColor={factor === 1 ? color : 'transparent'} strokeWidth={factor === 1 ? 2 : 0} fillColor={heatColor(color, factor)} zIndex={2} />
               ))}
-              <Marker coordinate={zone.coordinate} onPress={() => onSelectDanger?.(zone.id)} zIndex={45}>
+              {!groupedKeys.has(`danger:${zone.id}`) && <Marker coordinate={zone.coordinate} title={zone.title} description={zone.summary} onPress={() => onSelectDanger?.(zone.id)} zIndex={45}>
                 <View style={[styles.dangerMarker, { backgroundColor: color }]}>
                   <Ionicons name={icon} size={17} color="#fff" />
                   <Text style={styles.mapMarkerLabel}>{dangerLabels[zone.kind]}</Text>
                 </View>
-              </Marker>
+              </Marker>}
             </Fragment>
           );
         })}
@@ -165,7 +191,8 @@ export function TacticalMap({
         {plannedRoute && plannedRoute.length > 1 ? <RouteLine points={plannedRoute} /> : route === 'evacuation' ? <RouteLine points={[mock.me, mock.evacuation.coordinate]} /> : route === 'basement' ? <RouteLine points={mock.basementRoute} /> : null}
 
         {emergencySites.map((site) => (
-          <Marker key={site.id} coordinate={site.coordinate} onPress={() => onSelectSite?.(site.id)} zIndex={30} tracksViewChanges={false}>
+          groupedKeys.has(`site:${site.id}`) ? null :
+          <Marker key={site.id} coordinate={site.coordinate} title={site.title} description={site.summary} onPress={() => onSelectSite?.(site.id)} zIndex={30} tracksViewChanges={false}>
             <View style={[styles.emergencySiteMarker, { backgroundColor: siteColors[site.kind] }]}>
               <Ionicons name={siteIcons[site.kind]} size={18} color="#fff" />
               <Text style={styles.mapMarkerLabel}>{siteLabels[site.kind]}</Text>
@@ -181,11 +208,17 @@ export function TacticalMap({
           </Marker>
         ))}
         {helpOffers.map((offer) => (
+          groupedKeys.has(`offer:${offer.id}`) ? null :
           <Marker key={offer.id} coordinate={offer.coordinate} zIndex={35} tracksViewChanges={false} onPress={() => setSelectedOfferId(offer.id)}>
             <View style={styles.offerMarker}>
               <Ionicons name="medkit" size={15} color="#fff" />
               <Text style={styles.offerMarkerLabel}>OFFER</Text>
             </View>
+          </Marker>
+        ))}
+        {placeGroups.map((group) => (
+          <Marker key={group.key} coordinate={group.coordinate} zIndex={120} tracksViewChanges={false} onPress={() => { setSelectedOfferId(null); setPlaceChoices(group.items); }}>
+            <View style={styles.placeGroupMarker}><Ionicons name="layers" size={15} color="#fff" /><Text style={styles.placeGroupCount}>{group.items.length}</Text></View>
           </Marker>
         ))}
         {destination && (
@@ -207,7 +240,7 @@ export function TacticalMap({
             <View style={[styles.authorityMarker, { backgroundColor: authority.color }]}><Text style={styles.authorityLabel}>{authority.label}</Text></View>
           </Marker>
         ))}
-        <Marker coordinate={userLocation} anchor={{ x: 0.5, y: 0.5 }} zIndex={100} tracksViewChanges={false}>
+        <Marker coordinate={currentLocation ?? userLocation} anchor={{ x: 0.5, y: 0.5 }} zIndex={100} tracksViewChanges={false}>
           <View style={styles.myLocationMarker}>
             <View style={[styles.locationAccuracyRing, sos && styles.locationAccuracyRingSos]} />
             <View style={[styles.meMarker, sos && styles.meMarkerSos]}><Ionicons name={sos ? 'radio' : 'locate'} size={16} color="#fff" /></View>
@@ -215,16 +248,12 @@ export function TacticalMap({
           </View>
         </Marker>
       </MapView>
-      {selectedOffer && (
-        <View style={styles.offerPopup}>
-          <View style={styles.offerPopupText}>
-            <Text style={styles.offerPopupTitle}>{selectedOffer.title}</Text>
-            <Text style={styles.offerPopupMeta}>{selectedOffer.author} · {selectedOffer.distance}</Text>
-            {!!selectedOffer.description && <Text style={styles.offerPopupDescription}>{selectedOffer.description}</Text>}
-          </View>
-          <Text onPress={() => setSelectedOfferId(null)} accessibilityRole="button" style={styles.offerPopupClose}>×</Text>
-        </View>
-      )}
+      <CurrentLocationButton onLocation={(coordinate) => {
+        setCurrentLocation(coordinate);
+        map.current?.animateToRegion(regionAround(coordinate), 650);
+      }} />
+      {placeChoices && <MapPlaceChooser items={placeChoices} onChoose={choosePlace} onClose={() => setPlaceChoices(null)} />}
+      {selectedOffer && <HelpOfferMapPopup offer={selectedOffer} onClose={() => setSelectedOfferId(null)} />}
       <View pointerEvents="none" style={styles.attribution}><Text style={styles.attributionText}>© OpenStreetMap contributors</Text></View>
     </View>
   );
@@ -261,12 +290,8 @@ const styles = StyleSheet.create({
   nearbyPersonLabel: { color: '#fff', fontSize: 10, fontWeight: '800' },
   offerMarker: { minWidth: 64, height: 34, borderRadius: 17, borderWidth: 3, borderColor: '#fff', backgroundColor: colors.green, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, paddingHorizontal: 7, ...shadow },
   offerMarkerLabel: { color: '#fff', fontSize: 9, fontWeight: '900', letterSpacing: 0.3 },
-  offerPopup: { position: 'absolute', top: 58, left: 12, right: 62, flexDirection: 'row', alignItems: 'flex-start', gap: 10, backgroundColor: colors.card, borderRadius: 12, padding: 12, ...shadow },
-  offerPopupText: { flex: 1, gap: 3 },
-  offerPopupTitle: { color: colors.text, fontSize: 15, fontWeight: '800' },
-  offerPopupMeta: { color: colors.textMuted, fontSize: 12, fontWeight: '600' },
-  offerPopupDescription: { color: colors.text, fontSize: 13, marginTop: 4 },
-  offerPopupClose: { color: colors.textMuted, fontSize: 23, fontWeight: '600', paddingHorizontal: 5 },
+  placeGroupMarker: { width: 42, height: 42, borderRadius: 21, borderWidth: 3, borderColor: '#fff', backgroundColor: colors.text, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 2, ...shadow },
+  placeGroupCount: { color: '#fff', fontSize: 12, fontWeight: '900' },
   destinationMarker: { width: 38, height: 38, borderRadius: 19, borderWidth: 3, borderColor: '#fff', backgroundColor: colors.text, alignItems: 'center', justifyContent: 'center', ...shadow },
   mapMarkerLabel: { color: '#fff', fontSize: 9, fontWeight: '900', letterSpacing: 0.3 },
 });
