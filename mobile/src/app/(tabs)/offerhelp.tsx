@@ -1,31 +1,26 @@
-import { useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Alert, Image, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { Button, Card, Pill } from '@/components/ui';
 import mock from '@/data/mock.json';
 import { helpCategories } from '@/shared/demo';
 import { useApp } from '@/state/app';
+import { api, type HelpFeedItem as ApiHelpFeedItem } from '@/services/api';
 import { colors, radius, shadow } from '@/theme';
 
-type HelpFeedItem = {
-  id: string;
-  type: string;
-  icon: string;
-  title: string;
-  author: string;
-  distance: string;
-  tags: string[];
-  isMine?: boolean;
-  description?: string;
-  photos?: string[];
-};
+type HelpFeedItem = ApiHelpFeedItem;
 
 type ChatMessage = { id: string; text: string; sentAt: string };
 
 const MAX_PHOTOS = 3;
+const toChatMessage = (message: { id: string; text: string; sentAt: string }): ChatMessage => ({
+  id: message.id,
+  text: message.text,
+  sentAt: new Date(message.sentAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+});
 
 export default function HelpScreen() {
   const app = useApp();
@@ -34,16 +29,34 @@ export default function HelpScreen() {
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
   const [description, setDescription] = useState('');
   const [photos, setPhotos] = useState<string[]>([]);
-  const [localOffers, setLocalOffers] = useState<HelpFeedItem[]>([]);
+  const [feedItems, setFeedItems] = useState<HelpFeedItem[]>(mock.helpFeed as HelpFeedItem[]);
+  const [photoData, setPhotoData] = useState<Record<string, string>>({});
   const [editingOfferId, setEditingOfferId] = useState<string | null>(null);
   const [activeChat, setActiveChat] = useState<HelpFeedItem | null>(null);
   const [chatThreads, setChatThreads] = useState<Record<string, ChatMessage[]>>({});
+
+  useFocusEffect(useCallback(() => {
+    let active = true;
+    api.getHelpFeed().then((items) => { if (active) setFeedItems(items); }).catch(() => { if (active) setFeedItems(mock.helpFeed as HelpFeedItem[]); });
+    return () => { active = false; };
+  }, []));
+
+  useEffect(() => {
+    if (!activeChat) return;
+    const refresh = () => api.getMessages(activeChat.id)
+      .then((messages) => setChatThreads((current) => ({ ...current, [activeChat.id]: messages.map(toChatMessage) })))
+      .catch(() => {});
+    void refresh();
+    const timer = setInterval(() => { void refresh(); }, 4000);
+    return () => clearInterval(timer);
+  }, [activeChat]);
 
   function closeOfferModal() {
     setOfferModalVisible(false);
     setSelectedCategories([]);
     setDescription('');
     setPhotos([]);
+    setPhotoData({});
     setEditingOfferId(null);
   }
 
@@ -61,36 +74,39 @@ export default function HelpScreen() {
       allowsMultipleSelection: true,
       selectionLimit: remaining,
       quality: 0.8,
+      base64: true,
     });
     if (result.canceled) return;
     const tooLarge = result.assets.some((asset) => asset.fileSize && asset.fileSize > 5 * 1024 * 1024);
     if (tooLarge) Alert.alert('Photo too large', 'Choose photos smaller than 5 MB each.');
-    const accepted = result.assets.filter((asset) => !asset.fileSize || asset.fileSize <= 5 * 1024 * 1024);
+    const accepted = result.assets.filter((asset) => (!asset.fileSize || asset.fileSize <= 5 * 1024 * 1024) && !!asset.base64);
+    if (accepted.length < result.assets.filter((asset) => !asset.fileSize || asset.fileSize <= 5 * 1024 * 1024).length) Alert.alert('Photo unavailable', 'The selected photo could not be prepared for upload.');
     setPhotos((current) => [...current, ...accepted.map((asset) => asset.uri)].slice(0, MAX_PHOTOS));
+    setPhotoData((current) => ({ ...current, ...Object.fromEntries(accepted.map((asset) => [asset.uri, `data:image/jpeg;base64,${asset.base64}`])) }));
   }
 
-  function publishOffer() {
+  async function publishOffer() {
     if (selectedCategories.length === 0) {
       Alert.alert('Choose what you can offer', 'Select at least one type of help.');
       return;
     }
-    const categoryTitle = selectedCategories.join(' · ');
-    const offer: HelpFeedItem = {
-      id: editingOfferId || `local-${Date.now()}`,
-      type: 'offer',
-      icon: 'hand-left',
-      title: categoryTitle,
-      author: 'You',
-      distance: 'Location not shared',
-      tags: selectedCategories,
-      isMine: true,
-      description: description.trim() || undefined,
-      photos: photos.length ? photos : undefined,
-    };
-    setLocalOffers((current) => editingOfferId
-      ? current.map((item) => item.id === editingOfferId ? offer : item)
-      : [offer, ...current]);
-    closeOfferModal();
+    try {
+      const offer = editingOfferId
+        ? await api.updateOffer(editingOfferId, { categories: selectedCategories, description: description.trim() })
+        : await api.createOffer({ categories: selectedCategories, description: description.trim() });
+      setEditingOfferId(offer.id);
+      for (const uri of photos) {
+        const data = photoData[uri];
+        if (data) {
+          await api.uploadOfferPhoto(offer.id, data);
+          setPhotoData((current) => { const next = { ...current }; delete next[uri]; return next; });
+        }
+      }
+      setFeedItems(await api.getHelpFeed());
+      closeOfferModal();
+    } catch (error) {
+      Alert.alert('Could not publish offer', error instanceof Error ? error.message : 'Please sign in and try again.');
+    }
   }
 
   function editOffer(offer: HelpFeedItem) {
@@ -98,23 +114,31 @@ export default function HelpScreen() {
     setSelectedCategories(offer.tags);
     setDescription(offer.description || '');
     setPhotos(offer.photos || []);
+    setPhotoData({});
     setOfferModalVisible(true);
   }
 
   function stopOffering(offerId: string) {
     Alert.alert('Stop offering?', 'This offer will be removed from your Help feed.', [
       { text: 'Keep offering', style: 'cancel' },
-      { text: 'Stop offering', style: 'destructive', onPress: () => setLocalOffers((current) => current.filter((item) => item.id !== offerId)) },
+      { text: 'Stop offering', style: 'destructive', onPress: () => { void api.stopOffering(offerId).then(async () => setFeedItems(await api.getHelpFeed())).catch((error) => Alert.alert('Could not stop offering', error instanceof Error ? error.message : 'Please try again.')); } },
     ]);
   }
 
-  function sendChatMessage(requestId: string, text: string) {
+  async function sendChatMessage(requestId: string, text: string) {
     const message = text.trim();
     if (!message) return;
-    setChatThreads((current) => ({
-      ...current,
-      [requestId]: [...(current[requestId] || []), { id: `msg-${Date.now()}`, text: message, sentAt: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) }],
-    }));
+    try {
+      await api.sendMessage(requestId, message);
+      const messages = await api.getMessages(requestId);
+      setChatThreads((current) => ({ ...current, [requestId]: messages.map(toChatMessage) }));
+    } catch (error) {
+      Alert.alert('Message not sent', error instanceof Error ? error.message : 'Please sign in and try again.');
+    }
+  }
+
+  function openChat(item: HelpFeedItem) {
+    setActiveChat(item);
   }
 
   return (
@@ -151,12 +175,8 @@ export default function HelpScreen() {
         </Animated.View>
       )}
 
-      {localOffers.map((item, i) => (
-        <HelpItem key={item.id} item={item} index={i} onEdit={editOffer} onStop={stopOffering} />
-      ))}
-
-      {mock.helpFeed.map((item, i) => (
-        <HelpItem key={item.id} item={item} index={i} onChat={setActiveChat} />
+      {feedItems.map((item, i) => (
+        <HelpItem key={item.id} item={item} index={i} onEdit={editOffer} onStop={stopOffering} onChat={openChat} />
       ))}
 
       <OfferHelpModal
@@ -176,7 +196,7 @@ export default function HelpScreen() {
         request={activeChat}
         messages={activeChat ? chatThreads[activeChat.id] || [] : []}
         onClose={() => setActiveChat(null)}
-        onSend={(text) => activeChat && sendChatMessage(activeChat.id, text)}
+        onSend={(text) => activeChat && void sendChatMessage(activeChat.id, text)}
       />
     </ScrollView>
   );
@@ -275,7 +295,7 @@ function OfferHelpModal({
                   </Pressable>
                 )}
               </View>
-              <Text style={styles.photoHint}>Photos stay on this device in this demo.</Text>
+              <Text style={styles.photoHint}>New photos are reviewed before they appear to others.</Text>
             </View>
           </ScrollView>
 
@@ -340,7 +360,7 @@ function CoordinationChat({ request, messages, onClose, onSend }: {
             </View>
 
             <View style={styles.chatComposer}>
-              <Text style={styles.chatDemoNote}>Messages stay on this device in this demo.</Text>
+              <Text style={styles.chatDemoNote}>Messages sync through the server. Avoid sharing sensitive personal details.</Text>
               <View style={styles.composerRow}>
                 <TextInput
                   value={draft}

@@ -17,6 +17,7 @@ export default function RootLayout() {
             {Platform.OS === 'web' && <PhoneStatusBar />}
             <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.bg } }}>
               <Stack.Screen name="(tabs)" />
+              <Stack.Screen name="account" />
               <Stack.Screen name="guide/[id]" />
             </Stack>
           </View>

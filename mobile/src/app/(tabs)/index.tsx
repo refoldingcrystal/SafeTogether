@@ -1,14 +1,16 @@
-import { useMemo, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { useCallback, useMemo, useState } from 'react';
+import { Alert, Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
+import * as ImagePicker from 'expo-image-picker';
 import { TacticalMap } from '@/components/TacticalMap';
 import { Button, Card, NeedHelpButton, StatusBadge } from '@/components/ui';
 import mock from '@/data/mock.json';
 import { categoryIcons, incidentColors, incidentGuide } from '@/icons';
 import { demonstrationDangerZones, demonstrationIncidents, emergencySites, type DangerZone, type EmergencySite } from '@/shared/demo';
+import { api, type MapSnapshot } from '@/services/api';
 import { requestSafeRoadRoute, type SafeRoute } from '@/shared/routing';
 import { useApp } from '@/state/app';
 import { colors, radius } from '@/theme';
@@ -38,7 +40,43 @@ export default function MapScreen() {
   const [details, setDetails] = useState('');
   const [location, setLocation] = useState('');
   const [manualLocation, setManualLocation] = useState(false);
-  const routeOptions = useMemo(() => [{ id: 'me', title: 'My location', coordinate: mock.me }, ...emergencySites, ...(customDestination ? [customDestination] : [])], [customDestination]);
+  const [dangerZones, setDangerZones] = useState(demonstrationDangerZones);
+  const [sites, setSites] = useState(emergencySites);
+  const [allIncidents, setAllIncidents] = useState(demonstrationIncidents);
+  const [gps, setGps] = useState<{ latitude: number; longitude: number } | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [incidentPhotos, setIncidentPhotos] = useState<{ uri: string; data: string }[]>([]);
+
+  useFocusEffect(useCallback(() => {
+    let active = true;
+    api.getMap().then((snapshot: MapSnapshot) => {
+      if (!active) return;
+      setDangerZones(snapshot.dangerZones);
+      const mapSites = toMapSites(snapshot);
+      setSites(mapSites);
+      if (mapSites.length) setRouteTo((current) => mapSites.some((site) => site.id === current) ? current : mapSites[0].id);
+      setAllIncidents(snapshot.incidents.map((item) => ({
+        id: item.id,
+        category: item.category,
+        description: item.description,
+        approximateLocation: item.approximateLocation,
+        submittedAt: item.submittedAt,
+        updatedAt: item.updatedAt,
+        source: item.source,
+        verificationStatus: item.verificationStatus,
+        incidentStatus: item.status,
+      })));
+    }).catch(() => {
+      if (!active) return;
+      setDangerZones(demonstrationDangerZones);
+      setSites(emergencySites);
+      setAllIncidents(demonstrationIncidents);
+    });
+    return () => { active = false; };
+  }, []));
+  const incidents = useMemo(() => allIncidents.filter((incident) => incident.category !== 'Fire' && incident.category !== 'Flooding'), [allIncidents]);
+  const routeOptions = useMemo(() => [{ id: 'me', title: 'My location', coordinate: mock.me }, ...sites, ...(customDestination ? [customDestination] : [])], [customDestination, sites]);
   const from = routeOptions.find((point) => point.id === routeFrom) ?? routeOptions[0];
   const to = routeOptions.find((point) => point.id === routeTo) ?? emergencySites[0];
 
@@ -50,12 +88,69 @@ export default function MapScreen() {
     setRouteLoading(true);
     setRouteError(null);
     try {
-      setSafeRoute(await requestSafeRoadRoute(start, destination, demonstrationDangerZones));
+      setSafeRoute(await requestSafeRoadRoute(start, destination, dangerZones));
     } catch {
       setRouteError('No verified safe road route is available. Choose another destination or try again shortly.');
     } finally {
       setRouteLoading(false);
     }
+  }
+
+  async function submitHelpRequest() {
+    if (!helpKind || submitting) return;
+    setSubmitting(true);
+    setSubmitError(null);
+    const approximateLocation = gps
+      ? { label: location || 'Current location', ...gps, precision: 'neighborhood' as const }
+      : location || 'Location not shared';
+    let submitted = false;
+    let photoUploadFailed = false;
+    try {
+      if (helpKind === 'Request resources') {
+        await api.createHelpRequest({ kind: 'resource', title: request || undefined, categories: [request || 'Other practical help'], description: details, approximateLocation });
+        submitted = true;
+      } else {
+        const incident = await api.createIncident({ category: request || 'Other', description: details || request || helpKind, approximateLocation, shareWithAuthorities: true });
+        submitted = true;
+        for (const photo of incidentPhotos) {
+          try { await api.uploadIncidentPhoto(incident.id, photo.data); } catch { photoUploadFailed = true; }
+        }
+      }
+      setHelpMenuOpen(false);
+      setIncidentPhotos([]);
+      if (helpKind !== 'Request resources') app.setSos(true);
+      try {
+        const snapshot = await api.getMap();
+        setDangerZones(snapshot.dangerZones);
+        const mapSites = toMapSites(snapshot);
+        setSites(mapSites);
+        if (mapSites.length) setRouteTo((current) => mapSites.some((site) => site.id === current) ? current : mapSites[0].id);
+        setAllIncidents(snapshot.incidents.map((item) => ({ id: item.id, category: item.category, description: item.description, approximateLocation: item.approximateLocation, submittedAt: item.submittedAt, updatedAt: item.updatedAt, source: item.source, verificationStatus: item.verificationStatus, incidentStatus: item.status })));
+      } catch { /* The submission succeeded; keep the currently loaded map. */ }
+      if (photoUploadFailed) Alert.alert('Report sent', 'Your report was received, but one or more photos could not be uploaded.');
+    } catch (error) {
+      if (submitted) {
+        setHelpMenuOpen(false);
+        setIncidentPhotos([]);
+        if (helpKind !== 'Request resources') app.setSos(true);
+        Alert.alert('Request sent', 'Your request was received. The map could not refresh.');
+      } else {
+        setSubmitError(error instanceof Error ? error.message : 'Could not send the request.');
+      }
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function addIncidentPhotos() {
+    const remaining = 3 - incidentPhotos.length;
+    if (remaining <= 0) return;
+    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], allowsMultipleSelection: true, selectionLimit: remaining, quality: 0.8, base64: true });
+    if (result.canceled) return;
+    const tooLarge = result.assets.some((asset) => asset.fileSize && asset.fileSize > 5 * 1024 * 1024);
+    if (tooLarge) Alert.alert('Photo too large', 'Choose photos smaller than 5 MB each.');
+    const accepted = result.assets.filter((asset) => (!asset.fileSize || asset.fileSize <= 5 * 1024 * 1024) && !!asset.base64);
+    setIncidentPhotos((current) => [...current, ...accepted.map((asset) => ({ uri: asset.uri, data: `data:image/jpeg;base64,${asset.base64}` }))].slice(0, 3));
   }
 
   async function planRoute() {
@@ -65,10 +160,13 @@ export default function MapScreen() {
   async function openHelpMenu() {
     setHelpMenuOpen(true);
     setManualLocation(false);
+    setGps(null);
+    setLocation('');
     try {
       const permission = await Location.requestForegroundPermissionsAsync();
       if (permission.status !== 'granted') return;
       const current = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+      setGps({ latitude: current.coords.latitude, longitude: current.coords.longitude });
       setLocation(`Approx. ${current.coords.latitude.toFixed(2)}, ${current.coords.longitude.toFixed(2)}`);
     } catch {
       setManualLocation(true);
@@ -83,11 +181,11 @@ export default function MapScreen() {
         route={app.route}
         showBasement={app.p2pReceived}
         offline={app.offline}
-        dangerZones={demonstrationDangerZones}
-        emergencySites={emergencySites}
+        dangerZones={dangerZones}
+        emergencySites={sites}
         plannedRoute={safeRoute?.coordinates}
         destination={customDestination?.coordinate}
-        incidents={demonstrationIncidents.filter((incident) => incident.category !== 'Fire' && incident.category !== 'Flooding')}
+        incidents={incidents}
         selectedId={selectedId}
         onSelect={(id) => {
           setSelectedId(id);
@@ -118,6 +216,10 @@ export default function MapScreen() {
         }}
       />
 
+      <Pressable onPress={() => router.push('/account')} accessibilityRole="button" accessibilityLabel="Account" style={styles.accountButton}>
+        <Ionicons name="person-circle-outline" size={26} color={colors.text} />
+      </Pressable>
+
       <View style={styles.bottom} pointerEvents="box-none">
         {!app.sos && (
           <View style={styles.sosRow} pointerEvents="box-none">
@@ -126,8 +228,8 @@ export default function MapScreen() {
         )}
         <BottomCard
           selectedId={selectedId}
-          selectedDanger={demonstrationDangerZones.find((zone) => zone.id === selectedDangerId)}
-          selectedSite={emergencySites.find((site) => site.id === selectedSiteId)}
+          selectedDanger={dangerZones.find((zone) => zone.id === selectedDangerId)}
+          selectedSite={sites.find((site) => site.id === selectedSiteId)}
           plannerOpen={plannerOpen}
           setPlannerOpen={setPlannerOpen}
           routeOptions={routeOptions}
@@ -163,10 +265,13 @@ export default function MapScreen() {
             {helpKind && <View style={styles.quickChoices}>{helpKinds[helpKind].map((example) => <Pressable key={example} onPress={() => setRequest(example)} style={[styles.quickChoice, request === example && styles.quickChoiceActive]}><Text style={styles.quickChoiceText}>{example}</Text></Pressable>)}<Pressable onPress={() => setRequest('')} style={styles.quickChoice}><Text style={styles.quickChoiceText}>Other</Text></Pressable></View>}
             {helpKind && <TextInput value={request} onChangeText={setRequest} placeholder="Other request (optional)" placeholderTextColor={colors.textDim} style={styles.input} />}
             <Text style={styles.kicker}>LOCATION</Text>
-            <View style={styles.locationChoices}><Button label="Use current location" icon="locate" color={colors.blue} outline onPress={() => { setManualLocation(false); void openHelpMenu(); }} /><Button label="Enter manually" color={colors.textMuted} outline onPress={() => { setManualLocation(true); setLocation(''); }} /></View>
+            <View style={styles.locationChoices}><Button label="Use current location" icon="locate" color={colors.blue} outline onPress={() => { setManualLocation(false); void openHelpMenu(); }} /><Button label="Enter manually" color={colors.textMuted} outline onPress={() => { setManualLocation(true); setGps(null); setLocation(''); }} /></View>
             {manualLocation ? <TextInput value={location} onChangeText={setLocation} placeholder="Neighbourhood or nearby landmark" placeholderTextColor={colors.textDim} style={styles.input} /> : <Text style={styles.muted}>{location || 'Finding your approximate location…'}</Text>}
             <Text style={styles.kicker}>ADDITIONAL DETAILS (OPTIONAL)</Text><TextInput value={details} onChangeText={setDetails} placeholder="What happened or what do you need?" placeholderTextColor={colors.textDim} style={[styles.input, styles.detailsInput]} multiline textAlignVertical="top" />
-            <Text style={styles.disclaimer}>This demonstration does not contact emergency services or send your request to other people.</Text><Button label="Continue with help request" icon="send" disabled={!helpKind} onPress={() => { setHelpMenuOpen(false); app.setSos(true); }} />
+            {helpKind !== 'Request resources' && <View style={styles.photoField}><Text style={styles.kicker}>PHOTOS (OPTIONAL · UP TO 3)</Text><Button label="Add photos" icon="image-outline" color={colors.blue} outline onPress={() => { void addIncidentPhotos(); }} /><View style={styles.photoRow}>{incidentPhotos.map((photo) => <Pressable key={photo.uri} onPress={() => setIncidentPhotos((current) => current.filter((item) => item.uri !== photo.uri))} accessibilityRole="button" accessibilityLabel="Remove photo"><Image source={{ uri: photo.uri }} style={styles.photoPreview} /></Pressable>)}</View></View>}
+            <Text style={styles.disclaimer}>Your request will be shared with the SafeTogether community. Incident reports are also available to authorities. For immediate danger, call local emergency services.</Text>
+            {submitError && <Text accessibilityRole="alert" style={styles.submitError}>{submitError}</Text>}
+            <Button label={submitting ? 'Sending…' : 'Send help request'} icon="send" disabled={!helpKind || submitting || !location} onPress={() => { void submitHelpRequest(); }} />
           </ScrollView>
         </View>
       )}
@@ -175,6 +280,15 @@ export default function MapScreen() {
 }
 
 type RouteOption = { id: string; title: string; coordinate: { latitude: number; longitude: number }; kind?: EmergencySite['kind'] };
+
+function toMapSites(snapshot: MapSnapshot): EmergencySite[] {
+  const rendezvous = snapshot.rendezvousPoints.flatMap((point) => {
+    const { latitude, longitude } = point.location;
+    if (latitude === undefined || longitude === undefined) return [];
+    return [{ id: point.id, kind: 'safe_zone' as const, title: point.title, summary: point.instructions, coordinate: { latitude, longitude } }];
+  });
+  return [...snapshot.emergencySites, ...rendezvous];
+}
 
 function BottomCard({
   selectedId,
@@ -442,6 +556,7 @@ function Info({ icon, text }: { icon: keyof typeof Ionicons.glyphMap; text: stri
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
+  accountButton: { position: 'absolute', top: 12, right: 12, width: 42, height: 42, alignItems: 'center', justifyContent: 'center', borderRadius: 21, backgroundColor: colors.card },
   routeChoices: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
   routeChoice: { backgroundColor: colors.bg, borderColor: colors.border, borderWidth: 1, borderRadius: radius.sm, paddingHorizontal: 9, paddingVertical: 7 },
   routeChoiceActive: { backgroundColor: colors.green, borderColor: colors.green },
@@ -469,6 +584,10 @@ const styles = StyleSheet.create({
   input: { minHeight: 46, borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, backgroundColor: colors.bg, color: colors.text, paddingHorizontal: 12, paddingVertical: 10, fontSize: 15 },
   detailsInput: { minHeight: 92 },
   disclaimer: { color: colors.orange, backgroundColor: colors.orangeSoft, borderRadius: radius.md, padding: 10, fontSize: 12, fontWeight: '600', lineHeight: 17 },
+  submitError: { color: colors.red, fontSize: 13, fontWeight: '700' },
+  photoField: { gap: 8 },
+  photoRow: { flexDirection: 'row', gap: 8 },
+  photoPreview: { width: 60, height: 60, borderRadius: radius.sm },
   kicker: { fontSize: 11, fontWeight: '800', letterSpacing: 0.8, color: colors.textDim },
   title: { fontSize: 18, fontWeight: '800', color: colors.text },
   body: { fontSize: 14, color: colors.text },
