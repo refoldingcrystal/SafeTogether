@@ -8,6 +8,33 @@
 4. Ask contributors to inspect `git status --short` before editing and preserve any changes they find.
 5. Assign one feature outcome to each person. Ask them to post their ownership and expected touchpoints before they begin.
 
+## Run the native app on a phone
+
+The public mobile app is an Expo project in `mobile/`. Each collaborator should install [Expo Go](https://expo.dev/go) on their iOS or Android phone, then install the project dependencies once and start Expo:
+
+```sh
+cd mobile
+npm install
+npx expo start
+```
+
+Keep the phone and development computer on the same Wi-Fi network. When Expo displays its QR code, scan it with Expo Go on Android, or with the iPhone Camera app and then choose Expo Go. The development server must remain running while testing; saved changes normally refresh on the phone automatically.
+
+If the QR code opens but the app cannot connect, confirm that both devices are on the same non-guest network and that the computer firewall permits local-network connections. As a fallback for a network that prevents device-to-device traffic, start Expo with a tunnel (this needs internet access):
+
+```sh
+npx expo start --tunnel
+```
+
+For an Android phone connected by USB, enable USB debugging and use:
+
+```sh
+adb reverse tcp:8081 tcp:8081
+adb shell am start -a android.intent.action.VIEW -d 'exp://127.0.0.1:8081'
+```
+
+Expo Go is suitable for the current project. If a future change adds a native module that Expo Go does not include, the team will need an Expo development build instead; record that requirement in the change handoff.
+
 ## Suggested feature workstreams
 
 | Collaborator | Feature outcome | First focus | Likely touchpoints |
@@ -18,6 +45,8 @@
 | Collaborator 4 | Guides panel | Guide search, detail screens, checklist, emergency contacts, source metadata, and content governance | `mobile/src/app/(tabs)/guides.tsx`, `mobile/src/app/guide/`, shared guide data |
 
 The prototype is split into feature modules. These workstreams describe outcomes rather than exclusive files: contributors should make the smallest necessary changes across the app, coordinate shared-data changes in advance, and avoid concurrent edits to the same file.
+
+All four panel entry points are present and render on Android: Map, Report, Offer Help, and Guides. The browser prototype remains useful as a reference, but panel work should begin in `mobile/src/app/`.
 
 Expo / React Native is the public-app stack. OpenStreetMap is the intended future map-data direction. The Map-panel workstream should document the selected React Native renderer, tile source, attribution, usage limits, and location-privacy approach before replacing the demonstration map.
 
