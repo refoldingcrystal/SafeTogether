@@ -11,7 +11,7 @@ import mock from '@/data/mock.json';
 import { categoryIcons, incidentColors, incidentGuide } from '@/icons';
 import { demonstrationDangerZones, demonstrationHelpOffers, demonstrationIncidents, emergencySites, type DangerZone, type EmergencySite, type MapHelpOffer } from '@/shared/demo';
 import { api, type MapSnapshot } from '@/services/api';
-import type { ApproximateLocation, PersonalHelpCategory } from '@/shared/models';
+import type { ApproximateLocation, Incident, PersonalHelpCategory } from '@/shared/models';
 import { requestSafeRoadRoute, type SafeRoute } from '@/shared/routing';
 import { useApp } from '@/state/app';
 import { colors, radius } from '@/theme';
@@ -225,7 +225,7 @@ export default function MapScreen() {
           </View>
         )}
         <BottomCard
-          selectedId={selectedId}
+          selectedIncident={allIncidents.find((incident) => incident.id === selectedId)}
           selectedDanger={dangerZones.find((zone) => zone.id === selectedDangerId)}
           selectedSite={sites.find((site) => site.id === selectedSiteId)}
           plannerOpen={plannerOpen}
@@ -287,7 +287,7 @@ function toMapSites(snapshot: MapSnapshot): EmergencySite[] {
 }
 
 function BottomCard({
-  selectedId,
+  selectedIncident,
   selectedDanger,
   selectedSite,
   plannerOpen,
@@ -303,7 +303,7 @@ function BottomCard({
   onPlanRoute,
   onClose,
 }: {
-  selectedId: string | null;
+  selectedIncident?: Incident;
   selectedDanger?: DangerZone;
   selectedSite?: EmergencySite;
   plannerOpen: boolean;
@@ -320,7 +320,7 @@ function BottomCard({
   onClose: () => void;
 }) {
   const app = useApp();
-  const incident = demonstrationIncidents.find((i) => i.id === selectedId);
+  const incident = selectedIncident;
 
   if (plannerOpen) {
     return (
@@ -440,9 +440,13 @@ function BottomCard({
           <Text style={styles.body}>{incident.description}</Text>
           <View style={styles.row}>
             <StatusBadge status={incident.verificationStatus} />
-            <Info icon="location" text={`approx. ${incident.approximateLocation.label}`} />
-            <Info icon="time" text={incident.submittedAt} />
+            <Info icon="information-circle" text={incident.incidentStatus.replace('_', ' ')} />
           </View>
+          <View style={styles.row}>
+            <Info icon="location" text={`Approx. ${incident.approximateLocation.label}`} />
+            <Info icon="time" text={formatIncidentTime(incident.submittedAt)} />
+          </View>
+          {incident.source === 'authority' && <Text style={styles.muted}>Submitted by an authority</Text>}
           {guide && <Button icon="book" label="Open safety guide" color={colors.blue} outline onPress={() => router.push(`/guide/${guide}`)} />}
         </Card>
       </Animated.View>
@@ -539,6 +543,11 @@ function dangerColor(zone: DangerZone) {
 
 function siteColor(site: EmergencySite) {
   return site.kind === 'shelter' ? colors.green : site.kind === 'aid' ? colors.orange : colors.blue;
+}
+
+function formatIncidentTime(value: string) {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? value : date.toLocaleString();
 }
 
 function Info({ icon, text }: { icon: keyof typeof Ionicons.glyphMap; text: string }) {
