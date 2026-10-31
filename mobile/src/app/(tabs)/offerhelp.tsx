@@ -1,13 +1,15 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Alert, Image, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { router, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
+import * as Location from 'expo-location';
 import { Button, Card, Pill } from '@/components/ui';
 import mock from '@/data/mock.json';
 import { helpCategories } from '@/shared/demo';
 import { useApp } from '@/state/app';
+import type { ApproximateLocation } from '@/shared/models';
 import { api, type HelpFeedItem as ApiHelpFeedItem } from '@/services/api';
 import { colors, radius, shadow } from '@/theme';
 
@@ -28,12 +30,14 @@ export default function HelpScreen() {
   const [offerModalVisible, setOfferModalVisible] = useState(false);
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
   const [description, setDescription] = useState('');
+  const [offerLocation, setOfferLocation] = useState<ApproximateLocation | null>(null);
   const [photos, setPhotos] = useState<string[]>([]);
   const [feedItems, setFeedItems] = useState<HelpFeedItem[]>(mock.helpFeed as HelpFeedItem[]);
   const [photoData, setPhotoData] = useState<Record<string, string>>({});
   const [editingOfferId, setEditingOfferId] = useState<string | null>(null);
   const [activeChat, setActiveChat] = useState<HelpFeedItem | null>(null);
   const [chatThreads, setChatThreads] = useState<Record<string, ChatMessage[]>>({});
+  const visibleFeedItems = useMemo(() => feedItems.filter((item) => item.type === 'offer' ? item.isMine === true : item.isMine !== true), [feedItems]);
 
   useFocusEffect(useCallback(() => {
     let active = true;
@@ -55,6 +59,7 @@ export default function HelpScreen() {
     setOfferModalVisible(false);
     setSelectedCategories([]);
     setDescription('');
+    setOfferLocation(null);
     setPhotos([]);
     setPhotoData({});
     setEditingOfferId(null);
@@ -92,8 +97,8 @@ export default function HelpScreen() {
     }
     try {
       const offer = editingOfferId
-        ? await api.updateOffer(editingOfferId, { categories: selectedCategories, description: description.trim() })
-        : await api.createOffer({ categories: selectedCategories, description: description.trim() });
+        ? await api.updateOffer(editingOfferId, { categories: selectedCategories, description: description.trim(), approximateLocation: offerLocation })
+        : await api.createOffer({ categories: selectedCategories, description: description.trim(), approximateLocation: offerLocation });
       setEditingOfferId(offer.id);
       for (const uri of photos) {
         const data = photoData[uri];
@@ -113,9 +118,24 @@ export default function HelpScreen() {
     setEditingOfferId(offer.id);
     setSelectedCategories(offer.tags);
     setDescription(offer.description || '');
+    setOfferLocation(offer.approximateLocation || null);
     setPhotos(offer.photos || []);
     setPhotoData({});
     setOfferModalVisible(true);
+  }
+
+  async function shareOfferLocation() {
+    try {
+      const permission = await Location.requestForegroundPermissionsAsync();
+      if (permission.status !== 'granted') {
+        Alert.alert('Location permission needed', 'Allow location access to place your offer on the map.');
+        return;
+      }
+      const current = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+      setOfferLocation({ label: 'Approximate current area', latitude: current.coords.latitude, longitude: current.coords.longitude, precision: 'neighborhood' });
+    } catch {
+      Alert.alert('Could not get location', 'Try again or publish without a map location.');
+    }
   }
 
   function stopOffering(offerId: string) {
@@ -145,7 +165,7 @@ export default function HelpScreen() {
     <ScrollView style={styles.root} contentContainerStyle={styles.content} keyboardShouldPersistTaps="always">
       <View>
         <Text style={styles.title}>Help nearby</Text>
-        <Text style={styles.sub}>Offers and requests from neighbours</Text>
+        <Text style={styles.sub}>Your offers and requests you can respond to</Text>
       </View>
 
       <Button icon="hand-left" label="Offer help" color={colors.green} onPress={() => setOfferModalVisible(true)} />
@@ -175,7 +195,7 @@ export default function HelpScreen() {
         </Animated.View>
       )}
 
-      {feedItems.map((item, i) => (
+      {visibleFeedItems.map((item, i) => (
         <HelpItem key={item.id} item={item} index={i} onEdit={editOffer} onStop={stopOffering} onChat={openChat} />
       ))}
 
@@ -184,10 +204,13 @@ export default function HelpScreen() {
         editing={editingOfferId !== null}
         selectedCategories={selectedCategories}
         description={description}
+        offerLocation={offerLocation}
         photos={photos}
         onClose={closeOfferModal}
         onToggleCategory={toggleCategory}
         onChangeDescription={setDescription}
+        onSetLocation={shareOfferLocation}
+        onClearLocation={() => setOfferLocation(null)}
         onAddPhotos={addPhotos}
         onRemovePhoto={(uri) => setPhotos((current) => current.filter((photo) => photo !== uri))}
         onPublish={publishOffer}
@@ -207,10 +230,13 @@ function OfferHelpModal({
   editing,
   selectedCategories,
   description,
+  offerLocation,
   photos,
   onClose,
   onToggleCategory,
   onChangeDescription,
+  onSetLocation,
+  onClearLocation,
   onAddPhotos,
   onRemovePhoto,
   onPublish,
@@ -219,10 +245,13 @@ function OfferHelpModal({
   editing: boolean;
   selectedCategories: string[];
   description: string;
+  offerLocation: ApproximateLocation | null;
   photos: string[];
   onClose: () => void;
   onToggleCategory: (category: string) => void;
   onChangeDescription: (value: string) => void;
+  onSetLocation: () => void;
+  onClearLocation: () => void;
   onAddPhotos: () => void;
   onRemovePhoto: (uri: string) => void;
   onPublish: () => void;
@@ -260,6 +289,22 @@ function OfferHelpModal({
                   </Pressable>
                 );
               })}
+            </View>
+
+            <View style={styles.fieldGroup}>
+              <Text style={styles.sectionLabel}>MAP LOCATION <Text style={styles.optional}>(OPTIONAL)</Text></Text>
+              {offerLocation ? (
+                <View style={styles.locationRow}>
+                  <Text style={styles.locationText}>Shown near {offerLocation.label}</Text>
+                  <Pressable onPress={onClearLocation} accessibilityRole="button"><Text style={styles.clearLocation}>Remove</Text></Pressable>
+                </View>
+              ) : (
+                <Pressable onPress={onSetLocation} style={styles.locationButton} accessibilityRole="button">
+                  <Ionicons name="location-outline" size={18} color={colors.green} />
+                  <Text style={styles.addPhotoText}>Add approximate current location</Text>
+                </Pressable>
+              )}
+              <Text style={styles.photoHint}>The map shows an approximate neighborhood location.</Text>
             </View>
 
             <View style={styles.fieldGroup}>
@@ -420,11 +465,9 @@ function HelpItem({ item, index, onEdit, onStop, onChat }: { item: HelpFeedItem;
             <Button icon="create-outline" label="Edit offering" color={colors.green} outline onPress={() => onEdit?.(item)} />
             <Button icon="close-circle-outline" label="Stop offering" color={colors.red} outline onPress={() => onStop?.(item.id)} />
           </View>
-        ) : (
-          offer
-            ? <Button icon="navigate" label="I need this" color={color} outline onPress={() => undefined} />
-            : <Button icon="chatbubble-ellipses" label="Chat" color={colors.blue} onPress={() => onChat?.(item)} />
-        )}
+        ) : !offer ? (
+          <Button icon="chatbubble-ellipses" label="Chat" color={colors.blue} onPress={() => onChat?.(item)} />
+        ) : null}
       </Card>
     </Animated.View>
   );
@@ -485,6 +528,10 @@ const styles = StyleSheet.create({
   addPhotoButton: { width: 100, height: 76, borderRadius: radius.md, borderWidth: 1, borderColor: colors.green, borderStyle: 'dashed', alignItems: 'center', justifyContent: 'center', gap: 4, backgroundColor: colors.greenSoft },
   addPhotoText: { color: colors.green, fontSize: 12, fontWeight: '700' },
   photoHint: { color: colors.textDim, fontSize: 11, marginTop: 6 },
+  locationButton: { minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: 8, borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, paddingHorizontal: 12 },
+  locationRow: { minHeight: 44, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, paddingHorizontal: 12 },
+  locationText: { color: colors.text, fontSize: 13, fontWeight: '600' },
+  clearLocation: { color: colors.red, fontSize: 13, fontWeight: '700' },
   modalActions: { paddingHorizontal: 20, paddingTop: 10, borderTopWidth: 1, borderTopColor: colors.border, gap: 4 },
   cancelButton: { height: 38, alignItems: 'center', justifyContent: 'center' },
   cancelText: { color: colors.textMuted, fontWeight: '700', fontSize: 14 },

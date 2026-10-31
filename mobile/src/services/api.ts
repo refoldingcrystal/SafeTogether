@@ -45,6 +45,7 @@ export type HelpFeedItem = {
   isMine?: boolean;
   status: string;
   createdAt: string;
+  approximateLocation?: ApproximateLocation | null;
 };
 
 export type HelpRequest = HelpFeedItem & { type: 'request'; kind: 'resource' | 'emergency' | 'event' };

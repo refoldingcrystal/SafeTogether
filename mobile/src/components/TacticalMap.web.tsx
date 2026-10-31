@@ -3,12 +3,12 @@ import './map.css';
 import { useEffect, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import L from 'leaflet';
-import { Circle, MapContainer, Marker, Polyline, TileLayer, useMap } from 'react-leaflet';
+import { Circle, MapContainer, Marker, Polyline, Popup, TileLayer, useMap } from 'react-leaflet';
 import mock from '@/data/mock.json';
 import { incidentColors } from '@/icons';
 import { colors } from '@/theme';
 import type { Incident } from '@/shared/models';
-import type { DangerZone, EmergencySite } from '@/shared/demo';
+import type { DangerZone, EmergencySite, MapHelpOffer } from '@/shared/demo';
 import type { TacticalMapProps } from './TacticalMap';
 
 type LatLng = { latitude: number; longitude: number };
@@ -60,7 +60,7 @@ function Camera({ shelling, sos, route, incidents, selectedId }: TacticalMapProp
 
 export function TacticalMap(props: TacticalMapProps) {
   const [tileUnavailable, setTileUnavailable] = useState(false);
-  const { shelling, sos, route, showBasement, incidents, selectedId, onSelect, dangerZones = [], emergencySites = [], plannedRoute, onSelectDanger, onSelectSite } = props;
+  const { shelling, sos, route, showBasement, incidents, selectedId, onSelect, dangerZones = [], emergencySites = [], helpOffers = [], plannedRoute, onSelectDanger, onSelectSite } = props;
 
   return (
     <View style={styles.root}>
@@ -136,6 +136,11 @@ export function TacticalMap(props: TacticalMapProps) {
 
         {emergencySites.map((site) => (
           <Marker key={site.id} position={ll(site.coordinate)} icon={icon(`<div class="m-site" style="--c:${siteColor(site)}">${siteSymbol(site)}<div class="m-label">${site.title}</div></div>`, [38, 38])} eventHandlers={{ click: () => onSelectSite?.(site.id) }} />
+        ))}
+        {helpOffers.map((offer) => (
+          <Marker key={offer.id} position={ll(offer.coordinate)} icon={icon('<div class="m-offer">＋<div class="m-label">HELP OFFER</div></div>', [38, 38])}>
+            <Popup><strong>{offer.title}</strong><br />{offer.author}{offer.description ? <><br />{offer.description}</> : null}</Popup>
+          </Marker>
         ))}
 
         {sos &&
