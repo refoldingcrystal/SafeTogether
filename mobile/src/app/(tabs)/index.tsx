@@ -11,7 +11,7 @@ import { categoryIcons, incidentColors, incidentGuide } from '@/icons';
 import { demonstrationDangerZones, demonstrationIncidents, emergencySites, type DangerZone, type EmergencySite } from '@/shared/demo';
 import { requestSafeRoadRoute, type SafeRoute } from '@/shared/routing';
 import { useApp } from '@/state/app';
-import { colors, radius, shadow } from '@/theme';
+import { colors, radius } from '@/theme';
 
 type HelpKind = 'Emergency' | 'Report an event' | 'Request resources';
 const helpKinds: Record<HelpKind, string[]> = {
@@ -25,7 +25,6 @@ export default function MapScreen() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [selectedDangerId, setSelectedDangerId] = useState<string | null>(null);
   const [selectedSiteId, setSelectedSiteId] = useState<string | null>(null);
-  const [filter, setFilter] = useState<MapFilter>('all');
   const [plannerOpen, setPlannerOpen] = useState(false);
   const [routeFrom, setRouteFrom] = useState('me');
   const [routeTo, setRouteTo] = useState(emergencySites[0].id);
@@ -39,15 +38,6 @@ export default function MapScreen() {
   const [details, setDetails] = useState('');
   const [location, setLocation] = useState('');
   const [manualLocation, setManualLocation] = useState(false);
-  const incidents = useMemo(
-    () =>
-      demonstrationIncidents.filter((incident) => {
-        if (filter === 'verified') return incident.verificationStatus === 'verified';
-        if (filter === 'review') return incident.verificationStatus !== 'verified';
-        return true;
-      }),
-    [filter],
-  );
   const routeOptions = useMemo(() => [{ id: 'me', title: 'My location', coordinate: mock.me }, ...emergencySites, ...(customDestination ? [customDestination] : [])], [customDestination]);
   const from = routeOptions.find((point) => point.id === routeFrom) ?? routeOptions[0];
   const to = routeOptions.find((point) => point.id === routeTo) ?? emergencySites[0];
@@ -97,7 +87,7 @@ export default function MapScreen() {
         emergencySites={emergencySites}
         plannedRoute={safeRoute?.coordinates}
         destination={customDestination?.coordinate}
-        incidents={incidents}
+        incidents={demonstrationIncidents.filter((incident) => incident.category !== 'Fire' && incident.category !== 'Flooding')}
         selectedId={selectedId}
         onSelect={(id) => {
           setSelectedId(id);
@@ -127,25 +117,6 @@ export default function MapScreen() {
           void calculateRoute(mock.me, coordinate);
         }}
       />
-
-      <View style={styles.top} pointerEvents="box-none">
-        <View style={styles.header}>
-          <View style={styles.logo}>
-            <Ionicons name="add" size={22} color="#fff" />
-          </View>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.appName}>SafeTogether</Text>
-            <Text style={styles.appSub}>Conflict zone · Warsaw</Text>
-          </View>
-        </View>
-
-        <View style={styles.filters} accessibilityRole="radiogroup" accessibilityLabel="Incident filters">
-          <FilterChip label="All incidents" active={filter === 'all'} onPress={() => selectFilter('all', setFilter, setSelectedId)} />
-          <FilterChip label="Verified" active={filter === 'verified'} onPress={() => selectFilter('verified', setFilter, setSelectedId)} />
-          <FilterChip label="Needs review" active={filter === 'review'} onPress={() => selectFilter('review', setFilter, setSelectedId)} />
-        </View>
-
-      </View>
 
       <View style={styles.bottom} pointerEvents="box-none">
         {!app.sos && (
@@ -203,21 +174,7 @@ export default function MapScreen() {
   );
 }
 
-type MapFilter = 'all' | 'verified' | 'review';
 type RouteOption = { id: string; title: string; coordinate: { latitude: number; longitude: number }; kind?: EmergencySite['kind'] };
-
-function selectFilter(filter: MapFilter, setFilter: (filter: MapFilter) => void, setSelectedId: (id: string | null) => void) {
-  setFilter(filter);
-  setSelectedId(null);
-}
-
-function FilterChip({ label, active, onPress }: { label: string; active: boolean; onPress: () => void }) {
-  return (
-    <Pressable accessibilityRole="radio" accessibilityState={{ selected: active }} onPress={onPress} style={[styles.filterChip, active && styles.filterChipActive]}>
-      <Text style={[styles.filterText, active && styles.filterTextActive]}>{label}</Text>
-    </Pressable>
-  );
-}
 
 function BottomCard({
   selectedId,
@@ -393,21 +350,6 @@ function BottomCard({
           <Info icon="walk" text="approx. 65 min" />
           <Info icon="people" text={e.capacity} />
         </View>
-        <View style={styles.divider} />
-        <Text style={styles.kicker}>YOUR FAMILY</Text>
-        <View style={styles.row}>
-          {mock.family.map((f) => (
-            <View key={f.id} style={styles.person}>
-              <View style={[styles.avatar, { backgroundColor: f.color }]}>
-                <Text style={styles.avatarText}>{f.initials}</Text>
-              </View>
-              <View>
-                <Text style={styles.personName}>{f.name}</Text>
-                <Text style={styles.personStatus}>{f.status}</Text>
-              </View>
-            </View>
-          ))}
-        </View>
         <Text style={styles.routeHint}>Or long-press anywhere on the map to set a custom destination.</Text>
         <Button icon="navigate" label="Plan a safe road route" color={colors.green} onPress={() => setPlannerOpen(true)} />
       </Card>
@@ -500,31 +442,6 @@ function Info({ icon, text }: { icon: keyof typeof Ionicons.glyphMap; text: stri
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
-  top: { position: 'absolute', top: 0, left: 0, right: 0, padding: 12, gap: 8 },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    backgroundColor: colors.card,
-    borderRadius: radius.lg,
-    padding: 10,
-    ...shadow,
-  },
-  logo: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
-    backgroundColor: colors.red,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  appName: { fontSize: 17, fontWeight: '900', color: colors.text },
-  appSub: { fontSize: 12, color: colors.textMuted },
-  filters: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
-  filterChip: { backgroundColor: colors.card, borderColor: colors.border, borderWidth: 1, borderRadius: radius.pill, paddingHorizontal: 10, paddingVertical: 7, ...shadow },
-  filterChipActive: { backgroundColor: colors.blue, borderColor: colors.blue },
-  filterText: { color: colors.textMuted, fontSize: 11, fontWeight: '800' },
-  filterTextActive: { color: '#fff' },
   routeChoices: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
   routeChoice: { backgroundColor: colors.bg, borderColor: colors.border, borderWidth: 1, borderRadius: radius.sm, paddingHorizontal: 9, paddingVertical: 7 },
   routeChoiceActive: { backgroundColor: colors.green, borderColor: colors.green },
@@ -559,12 +476,6 @@ const styles = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center', gap: 12, flexWrap: 'wrap' },
   info: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   infoText: { fontSize: 13, fontWeight: '600', color: colors.textMuted },
-  divider: { height: 1, backgroundColor: colors.border },
-  person: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  avatar: { width: 30, height: 30, borderRadius: 15, alignItems: 'center', justifyContent: 'center' },
-  avatarText: { color: '#fff', fontWeight: '800' },
-  personName: { fontSize: 13, fontWeight: '700', color: colors.text },
-  personStatus: { fontSize: 11, color: colors.green, fontWeight: '600' },
   incidentIcon: { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
   sosBadge: {
     width: 46,

@@ -138,17 +138,6 @@ export function TacticalMap(props: TacticalMapProps) {
           <Marker key={site.id} position={ll(site.coordinate)} icon={icon(`<div class="m-site" style="--c:${siteColor(site)}">${siteSymbol(site)}<div class="m-label">${site.title}</div></div>`, [38, 38])} eventHandlers={{ click: () => onSelectSite?.(site.id) }} />
         ))}
 
-        {mock.family.map((f) => (
-          <Marker
-            key={f.id}
-            position={ll(f.coordinate)}
-            icon={icon(
-              `<div class="m-person" style="--c:${f.color}">${f.initials}<div class="m-label">${f.name} <small>· ${f.status}</small></div></div>`,
-              [36, 36],
-            )}
-          />
-        ))}
-
         {sos &&
           nearby.map((p, i) => (
             <Marker key={i} position={ll(p)} icon={icon('<div class="m-dot"></div>', [10, 10])} interactive={false} />
