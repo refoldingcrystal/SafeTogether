@@ -38,12 +38,13 @@ The current browser prototype under `src/` is not the mobile app source. Use it 
 
 ## Navigation
 
-Use a four-tab public navigation model:
+Use a five-tab public navigation model:
 
 1. Map
 2. Report
-3. Offer Help
-4. Guides
+3. Mesh
+4. Help (neighbour feed and the Offer Help flow)
+5. Guides
 
 Settings should be reached from the map header or a profile area so it does not displace emergency actions from the primary navigation.
 
@@ -88,10 +89,12 @@ The mobile app now defines its initial typed contract in `mobile/src/shared/mode
 
 The first Expo milestone should be demonstrable on a physical phone and include:
 
-1. Four-tab native navigation.
+1. Five-tab native navigation: Map, Report, Mesh, Help, and Guides.
 2. Mobile map placeholder with explicit demonstration status.
 3. Native report form with validation and local draft preservation.
-4. Guides list, search, guide details, and checklist persistence.
-5. A shared mock API layer that mirrors the agreed backend contract.
+4. Mesh status screen with clear demonstration and offline/queued states.
+5. Help feed and offer-help flow with clear demonstration status.
+6. Guides list, search, guide details, and checklist persistence.
+7. A shared mock API layer that mirrors the agreed backend contract.
 
 After that milestone, add backend synchronization, OpenStreetMap rendering, location permission, authenticated offer management, and official-notice notifications.

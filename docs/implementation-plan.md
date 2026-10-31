@@ -1,6 +1,6 @@
 # SafeTogether implementation plan
 
-This plan turns the current local prototype into a product foundation without having several people change the same files. It assumes four collaborators working by product feature rather than fixed file ownership.
+This plan turns the current local prototype into a product foundation without having several people change the same files. It assumes five collaborators working by product feature rather than fixed file ownership.
 
 ## First team decision
 
@@ -43,7 +43,7 @@ Define public visibility separately from internal data. Public records must neve
 
 Suggested shared tasks:
 
-- The four collaborators agree on the backend, database, deployment environment, and authentication provider.
+- The five collaborators agree on the backend, database, deployment environment, and authentication provider.
 - Agree on the API contract, public/private field rules, native navigation, and mobile lint, test, and build commands before a panel depends on them.
 - Any shared-state, route, or design-system change gets team review before integration.
 
@@ -88,15 +88,34 @@ Next after backend integration:
 
 Handoff: list validation behavior, submission states, privacy decisions, API assumptions, and changed files.
 
-### Collaborator 3 — Offer Help panel
+### Collaborator 3 — Mesh panel
 
 First sprint:
 
-1. Add availability, capacity, expiry, and clear offer-status states.
-2. Add a local “my offers” list with edit and withdraw actions, clearly marked as demonstration-only.
-3. Add publish loading, success, retry, and duplicate-submission protection.
-4. Make private contact handling explicit and keep it outside public listing data.
-5. Keep medical-help language limited to actual verified qualifications.
+1. Make online, offline, standby, discovery, relaying, and unavailable states unambiguous.
+2. Show what is queued, what has not been sent, and when the last successful synchronization occurred.
+3. Provide accessible status text and a non-animated fallback for the mesh visualization.
+4. Keep Bluetooth, peer identity, and location/privacy language explicit; do not imply a message was delivered when it is only queued.
+5. Document the proposed native transport, permissions, battery impact, and platform limitations for team review before adding a real peer-to-peer implementation.
+
+Next after the connectivity design is approved:
+
+- Integrate the approved native transport and permission flow.
+- Persist and safely retry queued actions without duplicating reports or offers.
+- Add test coverage for transport loss, relay failure, and return-to-internet synchronization.
+
+Handoff: list the states and claims shown to users, accessibility behavior, privacy decisions, transport assumptions, and changed files.
+
+### Collaborator 4 — Help panel
+
+First sprint:
+
+1. Add useful feed filtering, empty, loading, stale, and offline states for neighbour requests and offers.
+2. Add availability, capacity, expiry, and clear offer-status states.
+3. Add a local “my offers” list with edit and withdraw actions, clearly marked as demonstration-only.
+4. Add publish loading, success, retry, and duplicate-submission protection.
+5. Make private contact handling explicit and keep it outside public listing data.
+6. Keep medical-help language limited to actual verified qualifications.
 
 Next after authentication and backend integration:
 
@@ -104,9 +123,9 @@ Next after authentication and backend integration:
 - Persist offers through the API with expiration and moderation states.
 - Add safe private contact-request handling without exposing contact details publicly.
 
-Handoff: list offer states, privacy decisions, API assumptions, and changed files.
+Handoff: list feed and offer states, privacy decisions, API assumptions, and changed files.
 
-### Collaborator 4 — Guides panel
+### Collaborator 5 — Guides panel
 
 First sprint:
 
@@ -136,7 +155,7 @@ The team integrates work only after the shared model is agreed. Verify this jour
 
 Add a similar test path for a help offer: create, browse approximate information, withdraw, and ensure private contact details remain unavailable publicly.
 
-The authority dashboard is a shared integration workstream after these four panels use the agreed incident, help-offer, notice, and audit-event contracts. Build its incident review, official notices, internal notes, resource workflow, and audit history without assigning public-panel work to it.
+The authority dashboard is a shared integration workstream after these five panels use the agreed incident, help-offer, notice, audit-event, and connectivity contracts. Build its incident review, official notices, internal notes, resource workflow, and audit history without assigning public-panel work to it.
 
 ## Phase 3 — map, connectivity, and notifications
 
@@ -172,8 +191,9 @@ Do this only after location privacy rules are agreed.
 |---|---|---|
 | P0 | Collaborator 1 | Map-panel filters, incident states, official notices, OpenStreetMap decision, location-privacy plan |
 | P0 | Collaborator 2 | Report-panel validation, submission, error, retry, and queued states |
-| P0 | Collaborator 3 | Offer-Help-panel availability, capacity, management, withdrawal, and privacy states |
-| P0 | Collaborator 4 | Guides-panel metadata, contacts configuration, search, related guides, and checklist polish |
+| P0 | Collaborator 3 | Mesh-panel state clarity, queued-action visibility, accessibility fallback, and transport/privacy proposal |
+| P0 | Collaborator 4 | Help-panel feed states plus offer availability, capacity, management, withdrawal, and privacy states |
+| P0 | Collaborator 5 | Guides-panel metadata, contacts configuration, search, related guides, and checklist polish |
 | P1 | Team | API contract, backend scaffold, authentication approach, and basic test command |
 | P1 | Team | Integrate report-to-dashboard demo journey using the agreed record model |
 
