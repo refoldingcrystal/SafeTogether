@@ -122,9 +122,11 @@ function mapCoordinate(value) {
 }
 
 const HELP_CATEGORIES = ['Shelter', 'Food and water', 'Transport', 'Qualified first aid', 'Supplies', 'Other practical help'];
+const PERSONAL_HELP_CATEGORIES = ['Injured', 'Stranded', 'Lost', 'Other personal assistance'];
+const LEGACY_PERSONAL_HELP_CATEGORIES = ['Medical emergency', 'Trapped person', 'Missing person'];
 const HELP_ICONS = { 'Shelter': 'home', 'Food and water': 'water', 'Transport': 'bus', 'Qualified first aid': 'medkit', 'Supplies': 'cube', 'Other practical help': 'hand-left' };
 function normalizeHelpKind(value) {
-  return ({ resource: 'resource', 'Request resources': 'resource', emergency: 'emergency', Emergency: 'emergency', event: 'event', 'Report an event': 'event' })[value] || null;
+  return ({ resource: 'resource', 'Request resources': 'resource', emergency: 'emergency', Emergency: 'emergency' })[value] || null;
 }
 function helpCategories(body) {
   const requested = Array.isArray(body.categories) ? body.categories : body.category ? [body.category] : [];
@@ -161,6 +163,9 @@ function publicHelpRequest(request, viewerId) {
 function publicIncident(incident) {
   const { attachments = [], exactLocation, reporterId, shareWithAuthorities, ...safe } = incident;
   return { ...safe, attachments: incident.status === 'verified' ? attachments.filter((item) => item.approved).map(publicAttachment) : [] };
+}
+function isPersonalHelpIncident(incident) {
+  return PERSONAL_HELP_CATEGORIES.includes(incident.category) || LEGACY_PERSONAL_HELP_CATEGORIES.includes(incident.category);
 }
 function helpFeed(viewerId) {
   return [
@@ -237,18 +242,18 @@ async function route(req, res) {
   if (resource === 'auth' && method === 'GET' && parts[2] === 'me') return send(res, 200, { user: publicUser(user) });
 
   if (resource === 'map' && method === 'GET') {
-    const incidents = db.incidents.filter((item) => item.status !== 'rejected').map(publicIncident);
+    const incidents = db.incidents.filter((item) => item.status !== 'rejected' && isPersonalHelpIncident(item)).map(publicIncident);
     const notices = db.notices.filter((item) => item.status === 'published' && (!item.expiresAt || item.expiresAt > now()));
     const rendezvousPoints = db.rendezvousPoints.filter((item) => item.status === 'active');
     const emergencySites = db.emergencySites.filter((item) => item.status === 'active');
     const dangerZones = db.dangerZones.filter((item) => item.status === 'active' && (!item.expiresAt || item.expiresAt > now()));
     const people = db.locations.map((item) => privateUser(item.userId)).filter(Boolean).map((person) => getLocation(person, user)).filter(Boolean);
     const heat = new Map();
-    for (const incident of db.incidents.filter((item) => ['verified','in_progress','assigned'].includes(item.status))) {
+    for (const incident of db.incidents.filter((item) => isPersonalHelpIncident(item) && ['verified','in_progress','assigned'].includes(item.status))) {
       const location = incident.approximateLocation; const key = location.label.toLowerCase(); const cell = heat.get(key) || { label: location.label, latitude: location.latitude, longitude: location.longitude, count: 0 };
       cell.count += 1; heat.set(key, cell);
     }
-    const helpRequests = db.helpRequests.filter((item) => item.status === 'active').map(publicHelpRequest);
+    const helpRequests = db.helpRequests.filter((item) => item.status === 'active' && item.kind !== 'event').map(publicHelpRequest);
     return send(res, 200, { data: { incidents, notices, rendezvousPoints, emergencySites, dangerZones, people, heatmap: [...heat.values()], helpFeed: helpFeed(user.id), helpRequests } });
   }
 
@@ -256,13 +261,14 @@ async function route(req, res) {
 
   if (resource === 'help-requests' && method === 'GET' && parts.length === 2) {
     const requestedKind = url.searchParams.get('kind');
-    const rows = db.helpRequests.filter((item) => item.status === 'active' && (!requestedKind || item.kind === normalizeHelpKind(requestedKind))).map((item) => publicHelpRequest(item, user.id));
+    const rows = db.helpRequests.filter((item) => item.status === 'active' && item.kind !== 'event' && (!requestedKind || item.kind === normalizeHelpKind(requestedKind))).map((item) => publicHelpRequest(item, user.id));
     return send(res, 200, { data: rows });
   }
   if (resource === 'help-requests' && method === 'POST' && !recordId) {
-    const body = await readBody(req); const kind = normalizeHelpKind(body.kind) || 'resource';
+    const body = await readBody(req); const kind = normalizeHelpKind(body.kind);
+    if (!kind) throw fail(400, 'Choose personal emergency assistance or a resource request');
     const categories = requestCategories(body);
-    const description = clean(body.description, 1000); const title = clean(body.title, 120) || categories.join(' · ') || (kind === 'emergency' ? 'Emergency assistance' : kind === 'event' ? 'Report an event' : 'Help requested');
+    const description = clean(body.description, 1000); const title = clean(body.title, 120) || categories.join(' · ') || (kind === 'emergency' ? 'Emergency assistance' : 'Help requested');
     if (!title) throw fail(400, 'Request title is required');
     const row = { id: id('req'), kind, title, categories, tags: Array.isArray(body.tags) ? body.tags.map((item) => clean(item, 40)).filter(Boolean).slice(0, 8) : categories, description, approximateLocation: optionalLocation(body.approximateLocation), status: 'active', requesterId: user.id, participants: [user.id], createdAt: now(), updatedAt: now() };
     db.helpRequests.unshift(row); audit(user.id, 'help_request_created', 'help_request', row.id); await persist();
@@ -294,11 +300,12 @@ async function route(req, res) {
   }
 
   if (resource === 'incidents' && method === 'GET') {
-    const rows = db.incidents.filter((x) => x.status !== 'rejected' && (!url.searchParams.get('status') || x.status === url.searchParams.get('status'))).map(publicIncident);
+    const rows = db.incidents.filter((x) => isPersonalHelpIncident(x) && x.status !== 'rejected' && (!url.searchParams.get('status') || x.status === url.searchParams.get('status'))).map(publicIncident);
     return send(res, 200, { data: rows });
   }
   if (resource === 'incidents' && method === 'POST' && !recordId) {
     const body = await readBody(req); const category = clean(body.category, 60); const description = clean(body.description, 1000);
+    if (!PERSONAL_HELP_CATEGORIES.includes(category)) throw fail(400, 'Incident category must describe personal assistance: Injured, Stranded, Lost, or Other personal assistance');
     if (!category || description.length < 5) throw fail(400, 'Category and description (at least 5 characters) are required');
     const row = { id: id('inc'), category, description, approximateLocation: approximate(body.approximateLocation), submittedAt: now(), updatedAt: now(), source: 'community', verificationStatus: 'awaiting_review', status: 'new', reporterId: user.id, attachments: [], shareWithAuthorities: body.shareWithAuthorities !== false };
     db.incidents.unshift(row); audit(user.id, 'incident_submitted', 'incident', row.id); await persist();

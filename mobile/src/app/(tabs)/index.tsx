@@ -11,15 +11,14 @@ import mock from '@/data/mock.json';
 import { categoryIcons, incidentColors, incidentGuide } from '@/icons';
 import { demonstrationDangerZones, demonstrationHelpOffers, demonstrationIncidents, emergencySites, type DangerZone, type EmergencySite, type MapHelpOffer } from '@/shared/demo';
 import { api, type MapSnapshot } from '@/services/api';
-import type { ApproximateLocation } from '@/shared/models';
+import type { ApproximateLocation, PersonalHelpCategory } from '@/shared/models';
 import { requestSafeRoadRoute, type SafeRoute } from '@/shared/routing';
 import { useApp } from '@/state/app';
 import { colors, radius } from '@/theme';
 
-type HelpKind = 'Emergency' | 'Report an event' | 'Request resources';
+type HelpKind = 'Emergency' | 'Request resources';
 const helpKinds: Record<HelpKind, string[]> = {
-  Emergency: ['Medical emergency', 'Fire', 'Trapped person'],
-  'Report an event': ['Flooding', 'Riot or civil unrest', 'Armed conflict or shelling'],
+  Emergency: ['Injured', 'Stranded', 'Lost', 'Other personal assistance'],
   'Request resources': ['Food or water', 'Shelter', 'Transport'],
 };
 
@@ -81,7 +80,7 @@ export default function MapScreen() {
     });
     return () => { active = false; };
   }, []));
-  const incidents = useMemo(() => allIncidents.filter((incident) => incident.category !== 'Fire' && incident.category !== 'Flooding'), [allIncidents]);
+  const incidents = allIncidents;
   const routeOptions = useMemo(() => [{ id: 'me', title: 'My location', coordinate: mock.me }, ...sites, ...(customDestination ? [customDestination] : [])], [customDestination, sites]);
   const from = routeOptions.find((point) => point.id === routeFrom) ?? routeOptions[0];
   const to = routeOptions.find((point) => point.id === routeTo) ?? emergencySites[0];
@@ -114,7 +113,12 @@ export default function MapScreen() {
         await api.createHelpRequest({ kind: 'resource', title: request || undefined, categories: [request || 'Other practical help'], description: details, approximateLocation });
         submitted = true;
       } else {
-        const incident = await api.createIncident({ category: request || 'Other', description: details || request || helpKind, approximateLocation, shareWithAuthorities: true });
+        const personalCategories: PersonalHelpCategory[] = ['Injured', 'Stranded', 'Lost', 'Other personal assistance'];
+        const category: PersonalHelpCategory = personalCategories.includes(request as PersonalHelpCategory)
+          ? request as PersonalHelpCategory
+          : 'Other personal assistance';
+        const description = details.trim() || (category === 'Other personal assistance' && request.trim() ? request.trim() : `Needs help: ${category.toLowerCase()}`);
+        const incident = await api.createIncident({ category, description, approximateLocation, shareWithAuthorities: true });
         submitted = true;
         for (const photo of incidentPhotos) {
           try { await api.uploadIncidentPhoto(incident.id, photo.data); } catch { photoUploadFailed = true; }
@@ -256,10 +260,10 @@ export default function MapScreen() {
               <Pressable onPress={() => setHelpMenuOpen(false)} accessibilityRole="button" accessibilityLabel="Close help menu"><Ionicons name="close" size={24} color={colors.textMuted} /></Pressable>
             </View>
             {(Object.keys(helpKinds) as HelpKind[]).map((kind) => <Pressable key={kind} onPress={() => { setHelpKind(kind); setRequest(''); }} style={[styles.helpOption, helpKind === kind && styles.helpOptionActive]}><Text style={styles.optionTitle}>{kind}</Text><Text style={styles.optionDetail}>{helpKinds[kind].join(' · ')}</Text></Pressable>)}
-            {helpKind && <View style={styles.quickChoices}>{helpKinds[helpKind].map((example) => <Pressable key={example} onPress={() => setRequest(example)} style={[styles.quickChoice, request === example && styles.quickChoiceActive]}><Text style={styles.quickChoiceText}>{example}</Text></Pressable>)}<Pressable onPress={() => setRequest('')} style={styles.quickChoice}><Text style={styles.quickChoiceText}>Other</Text></Pressable></View>}
-            {helpKind && <TextInput value={request} onChangeText={setRequest} placeholder="Other request (optional)" placeholderTextColor={colors.textDim} style={styles.input} />}
+            {helpKind && <View style={styles.quickChoices}>{helpKinds[helpKind].map((example) => <Pressable key={example} onPress={() => setRequest(example)} style={[styles.quickChoice, request === example && styles.quickChoiceActive]}><Text style={styles.quickChoiceText}>{example}</Text></Pressable>)}</View>}
+            {helpKind && <TextInput value={request} onChangeText={setRequest} placeholder={helpKind === 'Emergency' ? 'Describe the help you need (optional)' : 'Other resource or request (optional)'} placeholderTextColor={colors.textDim} style={styles.input} />}
             <ApproximateLocationPicker value={requestLocation} onChange={setRequestLocation} />
-            <Text style={styles.kicker}>ADDITIONAL DETAILS (OPTIONAL)</Text><TextInput value={details} onChangeText={setDetails} placeholder="What happened or what do you need?" placeholderTextColor={colors.textDim} style={[styles.input, styles.detailsInput]} multiline textAlignVertical="top" />
+            <Text style={styles.kicker}>ADDITIONAL DETAILS (OPTIONAL)</Text><TextInput value={details} onChangeText={setDetails} placeholder="What help do you need?" placeholderTextColor={colors.textDim} style={[styles.input, styles.detailsInput]} multiline textAlignVertical="top" />
             {helpKind !== 'Request resources' && <View style={styles.photoField}><Text style={styles.kicker}>PHOTOS (OPTIONAL · UP TO 3)</Text><Button label="Add photos" icon="image-outline" color={colors.blue} outline onPress={() => { void addIncidentPhotos(); }} /><View style={styles.photoRow}>{incidentPhotos.map((photo) => <Pressable key={photo.uri} onPress={() => setIncidentPhotos((current) => current.filter((item) => item.uri !== photo.uri))} accessibilityRole="button" accessibilityLabel="Remove photo"><Image source={{ uri: photo.uri }} style={styles.photoPreview} /></Pressable>)}</View></View>}
             <Text style={styles.disclaimer}>Your request will be shared with the SafeTogether community. Incident reports are also available to authorities. For immediate danger, call local emergency services.</Text>
             {submitError && <Text accessibilityRole="alert" style={styles.submitError}>{submitError}</Text>}

@@ -1,6 +1,6 @@
 import { Platform } from 'react-native';
 import * as SecureStore from 'expo-secure-store';
-import type { ApproximateLocation, IncidentCategory, IncidentStatus, OfficialNotice, VerificationStatus } from '@/shared/models';
+import type { ApproximateLocation, IncidentCategory, IncidentStatus, OfficialNotice, PersonalHelpCategory, VerificationStatus } from '@/shared/models';
 
 const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL?.replace(/\/+$/, '');
 const TOKEN_KEY = 'safetogether.api.token';
@@ -17,7 +17,7 @@ export class ApiError extends Error {
 
 export type ApiUser = { id: string; name: string; role: 'resident' | 'authority'; createdAt: string };
 export type AuthSession = { token: string; user: ApiUser; created?: boolean };
-export type HelpKind = 'resource' | 'emergency' | 'event' | 'Request resources' | 'Emergency' | 'Report an event';
+export type HelpKind = 'resource' | 'emergency' | 'Request resources' | 'Emergency';
 export type ApiIncident = {
   id: string;
   category: IncidentCategory;
@@ -47,7 +47,7 @@ export type HelpFeedItem = {
   approximateLocation?: ApproximateLocation | null;
 };
 
-export type HelpRequest = HelpFeedItem & { type: 'request'; kind: 'resource' | 'emergency' | 'event' };
+export type HelpRequest = HelpFeedItem & { type: 'request'; kind: 'resource' | 'emergency' };
 export type HelpOffer = HelpFeedItem & { type: 'offer'; categories: string[] };
 export type HelpMessage = {
   id: string;
@@ -181,7 +181,7 @@ export const api = {
   sendMessage: (requestId: string, text: string) => post(`/help-requests/${encodeURIComponent(requestId)}/messages`, { text }) as Promise<HelpMessage>,
 
   getIncidents: () => request<ApiIncident[]>('/incidents'),
-  createIncident: (input: { category: string; description: string; approximateLocation: ApproximateLocation | string; shareWithAuthorities?: boolean }) => request<{ id: string }>('/incidents', { method: 'POST', body: JSON.stringify(input) }),
+  createIncident: (input: { category: PersonalHelpCategory; description: string; approximateLocation: ApproximateLocation | string; shareWithAuthorities?: boolean }) => request<{ id: string }>('/incidents', { method: 'POST', body: JSON.stringify(input) }),
   uploadIncidentPhoto: (incidentId: string, dataUrl: string) => post(`/incidents/${encodeURIComponent(incidentId)}/attachments`, { data: dataUrl }),
   getNotices: () => request<OfficialNotice[]>('/notices'),
   getRendezvousPoints: () => request<MapSnapshot['rendezvousPoints']>('/rendezvous'),

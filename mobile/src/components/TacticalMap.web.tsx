@@ -24,6 +24,10 @@ const icon = (html: string, size: [number, number] = [0, 0]) =>
 const HOUSE_SVG = '<svg viewBox="0 0 24 24"><path d="M12 3l10 8h-3v10h-5v-6h-4v6H5V11H2z"/></svg>';
 
 const GLYPHS: Record<string, string> = {
+  Injured: '<path d="M10 2h4v8h8v4h-8v8h-4v-8H2v-4h8z"/>',
+  Stranded: '<path d="M5 11l2-5h10l2 5h1v7h-2v2h-3v-2H9v2H6v-2H4v-7zm2.5-1h9l-1-3h-7z"/>',
+  Lost: '<circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5L21 21"/>',
+  'Other personal assistance': '<path d="M11 4h2v10h-2zM11 17h2v2h-2z"/>',
   Fire: '<path d="M12 2s5 4.5 5 10a5 5 0 01-10 0c0-2 1-3.5 1-3.5S9 11 11 11c0-4 1-9 1-9z"/>',
   Flooding: '<path d="M12 3c-4 5-6 8-6 11a6 6 0 0012 0c0-3-2-6-6-11z"/>',
   'Road blockage': '<path d="M5 11l2-5h10l2 5h1v7h-2v2h-3v-2H9v2H6v-2H4v-7zm2.5-1h9l-1-3h-7z"/>',
