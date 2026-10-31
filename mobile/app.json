@@ -29,7 +29,7 @@
       [
         "expo-location",
         {
-          "locationWhenInUsePermission": "Allow SafeTogether to use your location while you create a help request."
+          "locationWhenInUsePermission": "Allow SafeTogether to show your location on the map and include it in a help request."
         }
       ],
       "expo-secure-store"

@@ -8,7 +8,7 @@ import MapView, { Circle, Marker, Polyline, UrlTile } from 'react-native-maps';
 import mock from '@/data/mock.json';
 import { categoryIcons, incidentColors } from '@/icons';
 import type { Incident } from '@/shared/models';
-import type { Coordinate, DangerZone, EmergencySite, MapHelpOffer } from '@/shared/demo';
+import type { Coordinate, DangerZone, EmergencySite, MapHelpOffer, NearbyPerson } from '@/shared/demo';
 import type { Route } from '@/state/app';
 import { groupMapPlaces, type MapPlaceItem } from '@/shared/mapPlaces';
 import { colors, shadow } from '@/theme';
@@ -18,12 +18,15 @@ export type TacticalMapProps = {
   sos: boolean;
   route: Route;
   showBasement: boolean;
+  showCommunityReports?: boolean;
   offline?: boolean;
   dangerZones?: DangerZone[];
   emergencySites?: EmergencySite[];
+  nearbyPeople?: NearbyPerson[];
   helpOffers?: MapHelpOffer[];
   plannedRoute?: Coordinate[];
   destination?: Coordinate;
+  userLocation?: Coordinate;
   incidents: Incident[];
   selectedId: string | null;
   onSelect: (id: string) => void;
@@ -34,7 +37,7 @@ export type TacticalMapProps = {
 
 const MAP_REGION = { latitude: 52.225, longitude: 20.995, latitudeDelta: 0.065, longitudeDelta: 0.11 };
 const precisionRadius = { district: 450, neighborhood: 320, landmark: 200 } as const;
-const nearby = Array.from({ length: 16 }, (_, i) => ({
+const nearbyOffsets = Array.from({ length: 16 }, (_, i) => ({
   latitude: mock.me.latitude + Math.sin(i * 2.4) * 0.004 * (0.4 + (i % 4) / 4),
   longitude: mock.me.longitude + Math.cos(i * 2.4) * 0.0065 * (0.4 + (i % 3) / 3),
 }));
@@ -54,12 +57,15 @@ export function TacticalMap({
   sos,
   route,
   showBasement,
+  showCommunityReports = true,
   offline = false,
   dangerZones = [],
   emergencySites = [],
+  nearbyPeople = [],
   helpOffers = [],
   plannedRoute,
   destination,
+  userLocation = mock.me,
   incidents,
   selectedId,
   onSelect,
@@ -72,6 +78,10 @@ export function TacticalMap({
   const [selectedOfferId, setSelectedOfferId] = useState<string | null>(null);
   const [placeChoices, setPlaceChoices] = useState<MapPlaceItem[] | null>(null);
   const selected = useMemo(() => incidents.find((incident) => incident.id === selectedId), [incidents, selectedId]);
+  const nearby = useMemo(
+    () => nearbyOffsets.map((point) => ({ latitude: userLocation.latitude + point.latitude - mock.me.latitude, longitude: userLocation.longitude + point.longitude - mock.me.longitude })),
+    [userLocation.latitude, userLocation.longitude],
+  );
   const selectedOffer = helpOffers.find((offer) => offer.id === selectedOfferId);
   const placeGroups = useMemo(() => {
     const items: MapPlaceItem[] = [];
@@ -100,12 +110,12 @@ export function TacticalMap({
       map.current?.fitToCoordinates(mock.basementRoute, { edgePadding: { top: 130, right: 48, bottom: 300, left: 48 }, animated: true });
     } else if (route === 'evacuation') {
       map.current?.fitToCoordinates([mock.me, mock.evacuation.coordinate], { edgePadding: { top: 130, right: 48, bottom: 300, left: 48 }, animated: true });
-    } else if (shelling || sos) {
-      map.current?.animateToRegion(regionAround(mock.me, 0.026), 650);
+    } else if (shelling || sos || userLocation.latitude !== mock.me.latitude || userLocation.longitude !== mock.me.longitude) {
+      map.current?.animateToRegion(regionAround(userLocation, 0.026), 650);
     } else if (selectedPoint) {
       map.current?.animateToRegion(regionAround(selectedPoint), 550);
     }
-  }, [route, selected, shelling, sos]);
+  }, [route, selected, shelling, sos, userLocation]);
 
   return (
     <View style={styles.root} accessibilityLabel="Demonstration map powered by OpenStreetMap">
@@ -114,21 +124,22 @@ export function TacticalMap({
         style={StyleSheet.absoluteFill}
         initialRegion={MAP_REGION}
         mapType={Platform.OS === 'android' ? 'none' : 'standard'}
-        rotateEnabled={false}
+        rotateEnabled
         pitchEnabled={false}
-        showsCompass={false}
+        showsCompass
         toolbarEnabled={false}
         onLongPress={(event) => onDestinationLongPress?.(event.nativeEvent.coordinate)}
       >
         <UrlTile
           urlTemplate="https://tile.openstreetmap.org/{z}/{x}/{y}.png"
           maximumZ={19}
+          maximumNativeZ={14}
           shouldReplaceMapContent={Platform.OS === 'ios'}
           offlineMode={offline}
           zIndex={0}
         />
 
-        {incidents.map((incident) => {
+        {showCommunityReports && incidents.map((incident) => {
           const coordinate = incidentPoint(incident);
           if (!coordinate) return null;
           const color = incidentColors[incident.category] ?? colors.blue;
@@ -188,6 +199,14 @@ export function TacticalMap({
             </View>
           </Marker>
         ))}
+        {nearbyPeople.map((person) => (
+          <Marker key={person.id} coordinate={person.coordinate} title={`${person.name} · ${person.distance} away`} zIndex={18}>
+            <View style={styles.nearbyPersonMarker}>
+              <Text style={styles.nearbyPersonInitials}>{person.initials}</Text>
+              <Text style={styles.nearbyPersonLabel}>{person.name}</Text>
+            </View>
+          </Marker>
+        ))}
         {helpOffers.map((offer) => (
           groupedKeys.has(`offer:${offer.id}`) ? null :
           <Marker key={offer.id} coordinate={offer.coordinate} zIndex={35} tracksViewChanges={false} onPress={() => setSelectedOfferId(offer.id)}>
@@ -221,8 +240,12 @@ export function TacticalMap({
             <View style={[styles.authorityMarker, { backgroundColor: authority.color }]}><Text style={styles.authorityLabel}>{authority.label}</Text></View>
           </Marker>
         ))}
-        <Marker coordinate={currentLocation ?? mock.me} zIndex={100} tracksViewChanges={false}>
-          <View style={[styles.meMarker, sos && styles.meMarkerSos]}><Ionicons name={sos ? 'radio' : 'person'} size={12} color="#fff" /></View>
+        <Marker coordinate={currentLocation ?? userLocation} anchor={{ x: 0.5, y: 0.5 }} zIndex={100} tracksViewChanges={false}>
+          <View style={styles.myLocationMarker}>
+            <View style={[styles.locationAccuracyRing, sos && styles.locationAccuracyRingSos]} />
+            <View style={[styles.meMarker, sos && styles.meMarkerSos]}><Ionicons name={sos ? 'radio' : 'locate'} size={16} color="#fff" /></View>
+            <View style={[styles.myLocationLabel, sos && styles.myLocationLabelSos]}><Text style={styles.myLocationLabelText}>{sos ? 'SOS' : 'YOU'}</Text></View>
+          </View>
         </Marker>
       </MapView>
       <CurrentLocationButton onLocation={(coordinate) => {
@@ -250,12 +273,21 @@ const styles = StyleSheet.create({
   nearbyDot: { width: 10, height: 10, borderRadius: 5, borderWidth: 2, borderColor: '#fff', backgroundColor: colors.textMuted },
   authorityMarker: { borderRadius: 7, borderWidth: 2, borderColor: '#fff', paddingHorizontal: 7, paddingVertical: 4, ...shadow },
   authorityLabel: { color: '#fff', fontSize: 10, fontWeight: '800' },
-  meMarker: { width: 26, height: 26, borderRadius: 13, borderWidth: 4, borderColor: '#fff', backgroundColor: colors.blue, alignItems: 'center', justifyContent: 'center', ...shadow },
-  meMarkerSos: { backgroundColor: colors.red, transform: [{ scale: 1.15 }] },
+  myLocationMarker: { width: 62, height: 62, alignItems: 'center', justifyContent: 'center' },
+  locationAccuracyRing: { position: 'absolute', width: 54, height: 54, borderRadius: 27, backgroundColor: 'rgba(21, 112, 239, 0.18)', borderWidth: 2, borderColor: 'rgba(21, 112, 239, 0.42)' },
+  locationAccuracyRingSos: { backgroundColor: 'rgba(217, 45, 32, 0.2)', borderColor: 'rgba(217, 45, 32, 0.5)' },
+  meMarker: { width: 34, height: 34, borderRadius: 17, borderWidth: 4, borderColor: '#fff', backgroundColor: colors.blue, alignItems: 'center', justifyContent: 'center', ...shadow },
+  meMarkerSos: { backgroundColor: colors.red, transform: [{ scale: 1.1 }] },
+  myLocationLabel: { position: 'absolute', top: 48, backgroundColor: colors.blue, borderRadius: 8, paddingHorizontal: 6, paddingVertical: 2 },
+  myLocationLabelSos: { backgroundColor: colors.red },
+  myLocationLabelText: { color: '#fff', fontSize: 9, fontWeight: '900', letterSpacing: 0.6 },
   attribution: { position: 'absolute', right: 5, bottom: 5, backgroundColor: 'rgba(255,255,255,0.86)', borderRadius: 3, paddingHorizontal: 4, paddingVertical: 2 },
   attributionText: { fontSize: 8, color: colors.textMuted },
   dangerMarker: { minWidth: 70, height: 36, borderRadius: 18, borderWidth: 3, borderColor: '#fff', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, paddingHorizontal: 7, ...shadow },
   emergencySiteMarker: { minWidth: 72, height: 36, borderRadius: 10, borderWidth: 3, borderColor: '#fff', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, paddingHorizontal: 7, ...shadow },
+  nearbyPersonMarker: { height: 32, borderRadius: 16, borderWidth: 2, borderColor: '#fff', backgroundColor: colors.violet, flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 6, ...shadow },
+  nearbyPersonInitials: { width: 18, height: 18, borderRadius: 9, backgroundColor: '#fff', color: colors.violet, fontSize: 10, fontWeight: '900', textAlign: 'center', textAlignVertical: 'center' },
+  nearbyPersonLabel: { color: '#fff', fontSize: 10, fontWeight: '800' },
   offerMarker: { minWidth: 64, height: 34, borderRadius: 17, borderWidth: 3, borderColor: '#fff', backgroundColor: colors.green, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, paddingHorizontal: 7, ...shadow },
   offerMarkerLabel: { color: '#fff', fontSize: 9, fontWeight: '900', letterSpacing: 0.3 },
   placeGroupMarker: { width: 42, height: 42, borderRadius: 21, borderWidth: 3, borderColor: '#fff', backgroundColor: colors.text, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 2, ...shadow },
@@ -264,9 +296,9 @@ const styles = StyleSheet.create({
   mapMarkerLabel: { color: '#fff', fontSize: 9, fontWeight: '900', letterSpacing: 0.3 },
 });
 
-const dangerColors = { attack: colors.red, fire: '#F04438', flooding: colors.violet } as const;
-const dangerIcons = { attack: 'warning', fire: 'flame', flooding: 'water' } as const;
-const dangerLabels = { attack: 'ATTACK', fire: 'FIRE', flooding: 'FLOOD' } as const;
+const dangerColors = { attack: colors.red, fire: '#F04438', flooding: colors.violet, riot: colors.orange } as const;
+const dangerIcons = { attack: 'warning', fire: 'flame', flooding: 'water', riot: 'people' } as const;
+const dangerLabels = { attack: 'ATTACK', fire: 'FIRE', flooding: 'FLOOD', riot: 'RIOT' } as const;
 const siteColors = { shelter: colors.green, safe_zone: colors.blue, aid: colors.orange } as const;
 const siteIcons = { shelter: 'bed', safe_zone: 'shield-checkmark', aid: 'medkit' } as const;
 const siteLabels = { shelter: 'SHELTER', safe_zone: 'SAFE ZONE', aid: 'AID' } as const;
