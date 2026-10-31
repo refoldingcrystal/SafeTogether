@@ -8,6 +8,7 @@ Node.js 20+ REST API for the resident and authority clients. It uses only Node b
 cd backend
 $env:SAFETOGETHER_SECRET = "replace-with-a-long-random-secret"
 $env:SAFETOGETHER_AUTHORITY_ID = "ST-set-a-private-random-id-and-keep-it"
+$env:ELEVENLABS_API_KEY = "your-elevenlabs-key"   # optional, enables voice reports
 npm start
 ```
 
@@ -30,6 +31,8 @@ Create `mobile/.env.local` with `EXPO_PUBLIC_API_URL`. For Expo Go on a phone, u
 | `GET /help-feed` | Signed in | UI-shaped list of active personal help reports, resource requests, and offers |
 | `GET /help-requests`, `POST /help-requests`, `PATCH /help-requests/:id` | Signed in | Create, list, update, resolve, or withdraw emergency, event, or resource requests |
 | `GET /conversations/:id/messages`, `POST /conversations/:id/messages` | Signed in | Coordinate around a help request, personal report, or active offer |
+| `POST /transcribe/token` | Signed in | Single-use `{ token }` for ElevenLabs Scribe Realtime; the app streams microphone audio straight to ElevenLabs, so the API key stays on the server. Needs `ELEVENLABS_API_KEY` |
+| `POST /transcribe` | Signed in | Fallback: raw recording body (`Content-Type: audio/*`, max 7 MB) transcribed with ElevenLabs Scribe; returns `{ text }` |
 | `GET /incidents`, `POST /incidents` | Signed in | Public-safe incident list and report submission |
 | `DELETE /incidents/:id` | Reporter or authority | Permanently delete a report (idempotent for missing reports) |
 | `PATCH /incidents/:id` | Authority | Review status |

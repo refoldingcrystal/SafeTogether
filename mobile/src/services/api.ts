@@ -149,6 +149,12 @@ function post(path: string, body: unknown, authenticated = true) {
 export const api = {
   isConfigured: Boolean(API_BASE_URL),
 
+  realtimeTranscriptionToken: () => request<{ token: string }>('/transcribe/token', { method: 'POST' }),
+  async transcribeRecording(uri: string) {
+    const { File } = await import('expo-file-system');
+    const body = await new File(uri).arrayBuffer();
+    return request<{ text: string }>('/transcribe', { method: 'POST', body, headers: { 'content-type': 'audio/wav' } });
+  },
   async login(input: { id: string }) {
     try {
       const session = await post('/auth/id/login', input, false) as AuthSession;

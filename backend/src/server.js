@@ -105,6 +105,42 @@ async function readBody(req) {
   try { return chunks.length ? JSON.parse(Buffer.concat(chunks).toString('utf8')) : {}; }
   catch { throw fail(400, 'Body must be valid JSON'); }
 }
+async function readRawBody(req) {
+  const chunks = []; let size = 0;
+  for await (const chunk of req) { size += chunk.length; if (size > MAX_BODY) throw fail(413, 'Recording is too long'); chunks.push(chunk); }
+  return Buffer.concat(chunks);
+}
+function elevenLabsKey() {
+  const apiKey = process.env.ELEVENLABS_API_KEY;
+  if (!apiKey) throw fail(503, 'Voice input is not configured on this server (set ELEVENLABS_API_KEY)');
+  return apiKey;
+}
+async function elevenLabs(pathname, init) {
+  let response;
+  try { response = await fetch(`https://api.elevenlabs.io${pathname}`, { ...init, headers: { 'xi-api-key': elevenLabsKey() }, signal: AbortSignal.timeout(20000) }); }
+  catch (error) { if (error.status) throw error; throw fail(502, 'Voice service is unreachable'); }
+  if (!response.ok) {
+    const detail = await response.text().catch(() => '');
+    console.error(`ElevenLabs ${pathname} failed`, response.status, detail);
+    throw fail(502, `Voice service error (${response.status})`);
+  }
+  return response.json();
+}
+// The app streams audio straight to ElevenLabs with a single-use token, so the API key never leaves the server.
+async function realtimeTranscriptionToken() {
+  const { token } = await elevenLabs('/v1/single-use-token/realtime_scribe', { method: 'POST' });
+  return { token };
+}
+// Fallback when live streaming returns nothing: transcribe the recording the phone saved alongside the stream.
+async function transcribeRecording(audio, contentType) {
+  const form = new FormData();
+  form.append('model_id', 'scribe_v2');
+  form.append('file', new Blob([audio], { type: contentType }), 'report');
+  const started = Date.now();
+  const result = await elevenLabs('/v1/speech-to-text', { method: 'POST', body: form });
+  console.log(`Transcribed ${Math.round(audio.length / 1024)} KB in ${Date.now() - started} ms`);
+  return { text: clean(result.text, 1000) };
+}
 function send(res, status, body) {
   res.writeHead(status, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', 'access-control-allow-origin': process.env.CORS_ORIGIN || '*', 'access-control-allow-headers': 'content-type, authorization', 'access-control-allow-methods': 'GET,POST,PATCH,DELETE,OPTIONS' });
   res.end(status === 204 ? undefined : JSON.stringify(body));
@@ -237,6 +273,14 @@ async function route(req, res) {
 
   const user = auth(req);
   if (resource === 'auth' && method === 'GET' && parts[2] === 'me') return send(res, 200, { user: publicUser(user) });
+  if (resource === 'transcribe' && method === 'POST' && parts[2] === 'token') return send(res, 200, { data: await realtimeTranscriptionToken() });
+  if (resource === 'transcribe' && method === 'POST' && parts.length === 2) {
+    const contentType = String(req.headers['content-type'] || '').split(';')[0].trim();
+    if (!contentType.startsWith('audio/')) throw fail(415, 'Send the recording with an audio/* content type');
+    const audio = await readRawBody(req);
+    if (!audio.length) throw fail(400, 'Recording is empty');
+    return send(res, 200, { data: await transcribeRecording(audio, contentType) });
+  }
 
   if (resource === 'map' && method === 'GET') {
     const incidents = db.incidents.filter((item) => item.status !== 'rejected' && isPersonalHelpIncident(item) && item.reporterId !== user.id).map(publicIncident);

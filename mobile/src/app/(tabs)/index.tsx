@@ -7,6 +7,7 @@ import * as Location from 'expo-location';
 import { TacticalMap } from '@/components/TacticalMap';
 import { CoordinationChat, type CoordinationRequest } from '@/components/CoordinationChat';
 import { CurrentLocationButton } from '@/components/CurrentLocationButton';
+import { VoiceReportButton, guessEmergencyCategory } from '@/components/VoiceReportButton';
 import { Button, Card, NeedHelpButton } from '@/components/ui';
 import mock from '@/data/mock.json';
 import { offlineDemoPlaces, offlineDemoRoads } from '@/data/offlineMapDemo';
@@ -250,6 +251,14 @@ export default function MapScreen() {
     setNavigationActive(false);
   }
 
+  function fillFromVoice(text: string) {
+    // Voice reports default to Emergency; the person reviews everything before sending.
+    const kind = helpKind ?? 'Emergency';
+    setHelpKind(kind);
+    if (kind === 'Emergency' && !request) setRequest(guessEmergencyCategory(text));
+    setDetails((previous) => previous.trim() ? `${previous.trim()} ${text}` : text);
+  }
+
   async function submitHelpRequest() {
     if (!helpKind || submitting) return;
     setSubmitting(true);
@@ -301,6 +310,11 @@ export default function MapScreen() {
   }
 
   async function openHelpMenu() {
+    // Start every request from a blank form, whether the last one was sent or closed with ✕.
+    setHelpKind(null);
+    setRequest('');
+    setDetails('');
+    setSubmitError(null);
     setHelpMenuOpen(true);
   }
 
@@ -509,6 +523,7 @@ export default function MapScreen() {
               </Pressable>
             </View>
             <ScrollView keyboardShouldPersistTaps="always" contentContainerStyle={styles.helpContent}>
+              {!app.offline && <VoiceReportButton onTranscript={fillFromVoice} />}
               {(Object.keys(helpKinds) as HelpKind[]).map((kind) => <Pressable key={kind} onPress={() => { setHelpKind(kind); setRequest(''); }} style={[styles.helpOption, helpKind === kind && styles.helpOptionActive]}><Text style={styles.optionTitle}>{kind}</Text><Text style={styles.optionDetail}>{helpKinds[kind].join(' · ')}</Text></Pressable>)}
               {helpKind && <View style={styles.quickChoices}>{helpKinds[helpKind].map((example) => <Pressable key={example} onPress={() => setRequest(example)} style={[styles.quickChoice, request === example && styles.quickChoiceActive]}><Text style={styles.quickChoiceText}>{example}</Text></Pressable>)}</View>}
               <Text style={styles.muted}>Your current location is used automatically.</Text>

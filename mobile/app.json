@@ -32,7 +32,13 @@
           "locationWhenInUsePermission": "Allow SafeTogether to show your location on the map and include it in a help request."
         }
       ],
-      "expo-secure-store"
+      "expo-secure-store",
+      [
+        "expo-audio",
+        {
+          "microphonePermission": "Allow SafeTogether to record a spoken help request and turn it into text."
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true
