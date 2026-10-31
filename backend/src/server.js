@@ -317,7 +317,7 @@ async function route(req, res) {
   if (resource === 'incidents' && method === 'POST' && !recordId) {
     const body = await readBody(req); const category = clean(body.category, 60); const description = clean(body.description, 1000);
     if (!PERSONAL_HELP_CATEGORIES.includes(category)) throw fail(400, 'Incident category must describe personal assistance: Injured, Stranded, Lost, or Other personal assistance');
-    if (!category || description.length < 5) throw fail(400, 'Category and description (at least 5 characters) are required');
+    if (!category) throw fail(400, 'Choose a valid personal assistance category');
     const row = { id: id('inc'), category, description, approximateLocation: approximate(body.approximateLocation), submittedAt: now(), updatedAt: now(), source: 'community', verificationStatus: 'unverified', status: 'under_review', reporterId: user.id, attachments: [], shareWithAuthorities: body.shareWithAuthorities !== false };
     db.incidents.unshift(row); audit(user.id, 'incident_submitted', 'incident', row.id); await persist();
     return send(res, 201, { data: { id: row.id, category, description, approximateLocation: row.approximateLocation, submittedAt: row.submittedAt, status: row.status, verificationStatus: row.verificationStatus } });

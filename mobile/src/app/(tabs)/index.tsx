@@ -137,7 +137,7 @@ export default function MapScreen() {
         const category: PersonalHelpCategory = personalCategories.includes(request as PersonalHelpCategory)
           ? request as PersonalHelpCategory
           : 'Other personal assistance';
-        const description = details.trim() || (category === 'Other personal assistance' && request.trim() ? request.trim() : `Needs help: ${category.toLowerCase()}`);
+        const description = details.trim();
         const incident = await api.createIncident({ category, description, approximateLocation, shareWithAuthorities: true });
         submitted = true;
         for (const photo of incidentPhotos) {

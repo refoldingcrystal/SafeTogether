@@ -59,7 +59,7 @@ export default function OfferScreen() {
       </Card>
 
       <Card>
-        <Text style={shared.kicker}>DESCRIBE YOUR OFFER</Text>
+        <Text style={shared.kicker}>DESCRIPTION (OPTIONAL)</Text>
         <TextInput
           value={description}
           onChangeText={setDescription}
