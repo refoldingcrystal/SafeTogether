@@ -3,13 +3,17 @@ import './map.css';
 import { useEffect, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import L from 'leaflet';
-import { Circle, MapContainer, Marker, Polyline, Popup, TileLayer, useMap } from 'react-leaflet';
+import { Circle, MapContainer, Marker, Polyline, TileLayer, useMap } from 'react-leaflet';
+import { HelpOfferMapPopup } from '@/components/HelpOfferMapPopup';
+import { MapPlaceChooser } from '@/components/MapPlaceChooser';
+import { CurrentLocationButton } from '@/components/CurrentLocationButton';
 import mock from '@/data/mock.json';
 import { incidentColors } from '@/icons';
 import { colors } from '@/theme';
 import type { Incident } from '@/shared/models';
 import type { DangerZone, EmergencySite } from '@/shared/demo';
 import type { TacticalMapProps } from './TacticalMap';
+import { groupMapPlaces, type MapPlaceItem } from '@/shared/mapPlaces';
 
 type LatLng = { latitude: number; longitude: number };
 
@@ -20,6 +24,10 @@ const icon = (html: string, size: [number, number] = [0, 0]) =>
 const HOUSE_SVG = '<svg viewBox="0 0 24 24"><path d="M12 3l10 8h-3v10h-5v-6h-4v6H5V11H2z"/></svg>';
 
 const GLYPHS: Record<string, string> = {
+  Injured: '<path d="M10 2h4v8h8v4h-8v8h-4v-8H2v-4h8z"/>',
+  Stranded: '<path d="M5 11l2-5h10l2 5h1v7h-2v2h-3v-2H9v2H6v-2H4v-7zm2.5-1h9l-1-3h-7z"/>',
+  Lost: '<circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5L21 21"/>',
+  'Other personal assistance': '<path d="M11 4h2v10h-2zM11 17h2v2h-2z"/>',
   Fire: '<path d="M12 2s5 4.5 5 10a5 5 0 01-10 0c0-2 1-3.5 1-3.5S9 11 11 11c0-4 1-9 1-9z"/>',
   Flooding: '<path d="M12 3c-4 5-6 8-6 11a6 6 0 0012 0c0-3-2-6-6-11z"/>',
   'Road blockage': '<path d="M5 11l2-5h10l2 5h1v7h-2v2h-3v-2H9v2H6v-2H4v-7zm2.5-1h9l-1-3h-7z"/>',
@@ -60,7 +68,29 @@ function Camera({ shelling, sos, route, incidents, selectedId, userLocation = mo
 
 export function TacticalMap(props: TacticalMapProps) {
   const [tileUnavailable, setTileUnavailable] = useState(false);
-  const { shelling, sos, route, showBasement, showCommunityReports = false, incidents, selectedId, onSelect, dangerZones = [], emergencySites = [], nearbyPeople = [], helpOffers = [], plannedRoute, userLocation = mock.me, onSelectDanger, onSelectSite } = props;
+  const [placeChoices, setPlaceChoices] = useState<MapPlaceItem[] | null>(null);
+  const [selectedOfferId, setSelectedOfferId] = useState<string | null>(null);
+  const [currentLocation, setCurrentLocation] = useState<LatLng | null>(null);
+  const { shelling, sos, route, showBasement, showCommunityReports = true, incidents, selectedId, onSelect, dangerZones = [], emergencySites = [], nearbyPeople = [], helpOffers = [], plannedRoute, userLocation = mock.me, onSelectDanger, onSelectSite } = props;
+  const selectedOffer = helpOffers.find((offer) => offer.id === selectedOfferId);
+  const placeGroups = groupMapPlaces([
+    ...incidents.flatMap((incident) => {
+      const coordinate = incidentPoint(incident);
+      return coordinate ? [{ key: `incident:${incident.id}`, kind: 'incident' as const, id: incident.id, title: incident.category, coordinate: { latitude: coordinate[0], longitude: coordinate[1] } }] : [];
+    }),
+    ...dangerZones.map((zone) => ({ key: `danger:${zone.id}`, kind: 'danger' as const, id: zone.id, title: zone.title, coordinate: zone.coordinate })),
+    ...emergencySites.map((site) => ({ key: `site:${site.id}`, kind: 'site' as const, id: site.id, title: site.title, coordinate: site.coordinate })),
+    ...helpOffers.map((offer) => ({ key: `offer:${offer.id}`, kind: 'offer' as const, id: offer.id, title: offer.title, coordinate: offer.coordinate })),
+  ]);
+  const groupedKeys = new Set(placeGroups.flatMap((group) => group.items.map((item) => item.key)));
+
+  function choosePlace(item: MapPlaceItem) {
+    setPlaceChoices(null);
+    if (item.kind === 'incident') onSelect(item.id);
+    else if (item.kind === 'danger') onSelectDanger?.(item.id);
+    else if (item.kind === 'site') onSelectSite?.(item.id);
+    else setSelectedOfferId(item.id);
+  }
 
   return (
     <View style={styles.root}>
@@ -78,6 +108,7 @@ export function TacticalMap(props: TacticalMapProps) {
           />
         )}
         <Camera {...props} />
+        <UserLocationCamera coordinate={currentLocation} />
 
         {showCommunityReports && incidents.map((incident) => {
           const pos = incidentPoint(incident);
@@ -92,11 +123,11 @@ export function TacticalMap(props: TacticalMapProps) {
                 pathOptions={{ color, weight: 1.5, dashArray: '5 5', fillColor: color, fillOpacity: 0.12 }}
                 eventHandlers={{ click: () => onSelect(incident.id) }}
               />
-              <Marker
+              {!groupedKeys.has(`incident:${incident.id}`) && <Marker
                 position={pos}
                 icon={icon(`<div class="${cls}" style="--c:${color}"><svg viewBox="0 0 24 24">${GLYPHS[incident.category] ?? DEFAULT_GLYPH}</svg></div>`, [34, 34])}
                 eventHandlers={{ click: () => onSelect(incident.id) }}
-              />
+              />}
             </span>
           );
         })}
@@ -108,7 +139,7 @@ export function TacticalMap(props: TacticalMapProps) {
               {[1, 0.7, 0.42].map((factor) => (
                 <Circle key={factor} center={ll(zone.coordinate)} radius={zone.radius * factor} pathOptions={{ color: factor === 1 ? color : 'transparent', weight: factor === 1 ? 2 : 0, fillColor: color, fillOpacity: factor === 1 ? 0.1 : factor === 0.7 ? 0.13 : 0.2 }} />
               ))}
-              <Marker position={ll(zone.coordinate)} icon={icon(`<div class="m-danger" style="--c:${color}">${dangerSymbol(zone)}<div class="m-label">${dangerLabel(zone)}</div></div>`, [38, 38])} eventHandlers={{ click: () => onSelectDanger?.(zone.id) }} />
+              {!groupedKeys.has(`danger:${zone.id}`) && <Marker position={ll(zone.coordinate)} icon={icon(`<div class="m-danger" style="--c:${color}">${dangerSymbol(zone)}<div class="m-label">${dangerLabel(zone)}</div></div>`, [38, 38])} eventHandlers={{ click: () => onSelectDanger?.(zone.id) }} />}
             </span>
           );
         })}
@@ -135,12 +166,15 @@ export function TacticalMap(props: TacticalMapProps) {
         {plannedRoute && plannedRoute.length > 1 ? <RouteLine points={plannedRoute} /> : route === 'evacuation' ? <RouteLine points={[mock.me, mock.evacuation.coordinate]} /> : route === 'basement' ? <RouteLine points={mock.basementRoute} /> : null}
 
         {emergencySites.map((site) => (
+          groupedKeys.has(`site:${site.id}`) ? null :
           <Marker key={site.id} position={ll(site.coordinate)} icon={icon(`<div class="m-site" style="--c:${siteColor(site)}">${siteSymbol(site)}<div class="m-label">${site.title}</div></div>`, [38, 38])} eventHandlers={{ click: () => onSelectSite?.(site.id) }} />
         ))}
         {helpOffers.map((offer) => (
-          <Marker key={offer.id} position={ll(offer.coordinate)} icon={icon('<div class="m-offer">＋<div class="m-label">HELP OFFER</div></div>', [38, 38])}>
-            <Popup><strong>{offer.title}</strong><br />{offer.author}{offer.description ? <><br />{offer.description}</> : null}</Popup>
-          </Marker>
+          groupedKeys.has(`offer:${offer.id}`) ? null :
+          <Marker key={offer.id} position={ll(offer.coordinate)} icon={icon('<div class="m-offer">＋<div class="m-label">HELP OFFER</div></div>', [38, 38])} eventHandlers={{ click: () => setSelectedOfferId(offer.id) }} />
+        ))}
+        {placeGroups.map((group) => (
+          <Marker key={group.key} position={ll(group.coordinate)} zIndexOffset={2000} icon={icon(`<div class="m-cluster">${group.items.length}</div>`, [42, 42])} eventHandlers={{ click: () => { setSelectedOfferId(null); setPlaceChoices(group.items); } }} />
         ))}
 
         {nearbyPeople.map((person) => (
@@ -164,7 +198,7 @@ export function TacticalMap(props: TacticalMapProps) {
         )}
 
         <Marker
-          position={ll(userLocation)}
+          position={ll(currentLocation ?? userLocation)}
           zIndexOffset={1000}
           icon={icon(
             `<div class="m-me ${sos ? 'sos' : ''}" style="--c:${sos ? colors.red : colors.blue}">⌖<div class="m-label">${sos ? 'SOS · your location' : 'YOU · your location'}</div></div>`,
@@ -172,10 +206,21 @@ export function TacticalMap(props: TacticalMapProps) {
           )}
         />
       </MapContainer>
+      <CurrentLocationButton onLocation={setCurrentLocation} />
+      {placeChoices && <MapPlaceChooser items={placeChoices} onChoose={choosePlace} onClose={() => setPlaceChoices(null)} />}
+      {selectedOffer && <HelpOfferMapPopup offer={selectedOffer} onClose={() => setSelectedOfferId(null)} />}
       {!tileUrl && <View pointerEvents="none" style={styles.tileNotice}><Text style={styles.tileNoticeText}>Basemap provider not configured · demonstration overlays only</Text></View>}
       {tileUrl && tileUnavailable && <View pointerEvents="none" style={styles.tileNotice}><Text style={styles.tileNoticeText}>Basemap unavailable · demonstration overlays only</Text></View>}
     </View>
   );
+}
+
+function UserLocationCamera({ coordinate }: { coordinate: LatLng | null }) {
+  const map = useMap();
+  useEffect(() => {
+    if (coordinate) map.flyTo(ll(coordinate), 15, { duration: 0.8 });
+  }, [coordinate, map]);
+  return null;
 }
 
 function dangerColor(zone: DangerZone) {

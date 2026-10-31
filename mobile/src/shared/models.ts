@@ -1,9 +1,11 @@
-export type IncidentCategory =
+export type PersonalHelpCategory = 'Injured' | 'Stranded' | 'Lost' | 'Other personal assistance';
+
+export type IncidentCategory = PersonalHelpCategory
   | 'Medical emergency'
-  | 'Fire'
-  | 'Flooding'
   | 'Trapped person'
   | 'Missing person'
+  | 'Fire'
+  | 'Flooding'
   | 'Road blockage'
   | 'Infrastructure damage'
   | 'Other';

@@ -5,6 +5,10 @@ import { colors } from '@/theme';
 export type IconName = keyof typeof Ionicons.glyphMap;
 
 export const categoryIcons: Record<string, IconName> = {
+  Injured: 'medkit',
+  Stranded: 'car',
+  Lost: 'search',
+  'Other personal assistance': 'hand-left',
   'Medical emergency': 'medkit',
   Fire: 'flame',
   Flooding: 'water',
@@ -22,6 +26,10 @@ export const categoryIcons: Record<string, IconName> = {
 };
 
 export const incidentColors: Record<string, string> = {
+  Injured: colors.red,
+  Stranded: colors.orange,
+  Lost: colors.blue,
+  'Other personal assistance': colors.blue,
   Fire: colors.red,
   'Medical emergency': colors.red,
   Flooding: colors.mesh,
@@ -45,6 +53,8 @@ export const guideIcons: Record<string, { icon: IconName; color: string }> = {
 };
 
 export const incidentGuide: Partial<Record<IncidentCategory, string>> = {
+  Injured: 'first-aid',
+  'Other personal assistance': 'first-aid',
   Fire: 'fire',
   Flooding: 'flood',
   'Medical emergency': 'first-aid',

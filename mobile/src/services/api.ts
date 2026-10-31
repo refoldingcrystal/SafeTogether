@@ -1,6 +1,6 @@
 import { Platform } from 'react-native';
 import * as SecureStore from 'expo-secure-store';
-import type { ApproximateLocation, IncidentCategory, IncidentStatus, OfficialNotice, VerificationStatus } from '@/shared/models';
+import type { ApproximateLocation, IncidentCategory, IncidentStatus, OfficialNotice, PersonalHelpCategory, VerificationStatus } from '@/shared/models';
 
 const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL?.replace(/\/+$/, '');
 const TOKEN_KEY = 'safetogether.api.token';
@@ -17,7 +17,7 @@ export class ApiError extends Error {
 
 export type ApiUser = { id: string; name: string; role: 'resident' | 'authority'; createdAt: string };
 export type AuthSession = { token: string; user: ApiUser; created?: boolean };
-export type HelpKind = 'resource' | 'emergency' | 'event' | 'Request resources' | 'Emergency' | 'Report an event';
+export type HelpKind = 'resource' | 'emergency' | 'Request resources' | 'Emergency';
 export type ApiIncident = {
   id: string;
   category: IncidentCategory;
@@ -41,14 +41,13 @@ export type HelpFeedItem = {
   distance: string;
   tags: string[];
   description?: string;
-  photos?: string[];
   isMine?: boolean;
   status: string;
   createdAt: string;
   approximateLocation?: ApproximateLocation | null;
 };
 
-export type HelpRequest = HelpFeedItem & { type: 'request'; kind: 'resource' | 'emergency' | 'event' };
+export type HelpRequest = HelpFeedItem & { type: 'request'; kind: 'resource' | 'emergency' };
 export type HelpOffer = HelpFeedItem & { type: 'offer'; categories: string[] };
 export type HelpMessage = {
   id: string;
@@ -147,10 +146,6 @@ function post(path: string, body: unknown, authenticated = true) {
   return request(path, { method: 'POST', body: JSON.stringify(body) }, authenticated);
 }
 
-function resolveHelpFeedPhotos(items: HelpFeedItem[]) {
-  return items.map((item) => ({ ...item, photos: item.photos?.map((photo) => new URL(photo, `${API_BASE_URL}/`).toString()) }));
-}
-
 export const api = {
   async login(input: { id: string }) {
     try {
@@ -171,13 +166,12 @@ export const api = {
 
   me: () => request<{ user: ApiUser }>('/auth/me'),
   getMap: () => request<MapSnapshot>('/map'),
-  getHelpFeed: async () => resolveHelpFeedPhotos(await request<HelpFeedItem[]>('/help-feed')),
-  getOffers: async () => resolveHelpFeedPhotos(await request<HelpOffer[]>('/offers')) as HelpOffer[],
+  getHelpFeed: () => request<HelpFeedItem[]>('/help-feed'),
+  getOffers: () => request<HelpOffer[]>('/offers'),
 
   createOffer: (input: CreateOfferInput) => post('/offers', input) as Promise<HelpOffer>,
   updateOffer: (offerId: string, input: UpdateOfferInput) => request<HelpOffer>(`/offers/${encodeURIComponent(offerId)}`, { method: 'PATCH', body: JSON.stringify(input) }),
   stopOffering: (offerId: string) => request<HelpOffer>(`/offers/${encodeURIComponent(offerId)}`, { method: 'PATCH', body: JSON.stringify({ status: 'withdrawn' }) }),
-  uploadOfferPhoto: (offerId: string, dataUrl: string) => post(`/offers/${encodeURIComponent(offerId)}/attachments`, { data: dataUrl }),
 
   getHelpRequests: (kind?: 'resource' | 'emergency' | 'event') => request<HelpRequest[]>(`/help-requests${kind ? `?kind=${encodeURIComponent(kind)}` : ''}`),
   createHelpRequest: (input: CreateHelpRequestInput) => post('/help-requests', input) as Promise<HelpRequest>,
@@ -187,7 +181,7 @@ export const api = {
   sendMessage: (requestId: string, text: string) => post(`/help-requests/${encodeURIComponent(requestId)}/messages`, { text }) as Promise<HelpMessage>,
 
   getIncidents: () => request<ApiIncident[]>('/incidents'),
-  createIncident: (input: { category: string; description: string; approximateLocation: ApproximateLocation | string; shareWithAuthorities?: boolean }) => request<{ id: string }>('/incidents', { method: 'POST', body: JSON.stringify(input) }),
+  createIncident: (input: { category: PersonalHelpCategory; description: string; approximateLocation: ApproximateLocation | string; shareWithAuthorities?: boolean }) => request<{ id: string }>('/incidents', { method: 'POST', body: JSON.stringify(input) }),
   uploadIncidentPhoto: (incidentId: string, dataUrl: string) => post(`/incidents/${encodeURIComponent(incidentId)}/attachments`, { data: dataUrl }),
   getNotices: () => request<OfficialNotice[]>('/notices'),
   getRendezvousPoints: () => request<MapSnapshot['rendezvousPoints']>('/rendezvous'),
