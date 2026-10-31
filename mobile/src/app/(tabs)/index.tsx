@@ -387,16 +387,16 @@ export default function MapScreen() {
         )}
       </View>
 
-      <View style={styles.bottom} pointerEvents="box-none">
-        <View style={styles.sosRow} pointerEvents="box-none">
-          {!app.sos ? <NeedHelpButton onPress={openHelpMenu} /> : <View style={styles.helpButtonPlaceholder} />}
-          <View style={styles.mapActions}>
-            <CurrentLocationButton onLocation={(coordinate) => { setMapLocation(coordinate); setCurrentLocationOverride(coordinate); }} />
-            <Pressable onPress={() => router.push('/account')} accessibilityRole="button" accessibilityLabel="Account" style={styles.accountButton}>
-              <Ionicons name="person-circle-outline" size={26} color={colors.text} />
-            </Pressable>
-          </View>
+      <View style={styles.topControls} pointerEvents="box-none">
+        <View style={styles.mapActions}>
+          <CurrentLocationButton onLocation={(coordinate) => { setMapLocation(coordinate); setCurrentLocationOverride(coordinate); }} />
+          <Pressable onPress={() => router.push('/account')} accessibilityRole="button" accessibilityLabel="Account" style={styles.accountButton}>
+            <Ionicons name="person-circle-outline" size={26} color={colors.text} />
+          </Pressable>
         </View>
+        {!app.sos ? <NeedHelpButton onPress={openHelpMenu} /> : <View style={styles.helpButtonPlaceholder} />}
+      </View>
+      <View style={styles.bottom} pointerEvents="box-none">
         <BottomCard
           selectedIncident={allIncidents.find((incident) => incident.id === selectedId)}
           selectedDanger={dangerZones.find((zone) => zone.id === selectedDangerId)}
@@ -800,7 +800,7 @@ function Info({ icon, text }: { icon: keyof typeof Ionicons.glyphMap; text: stri
 const styles = StyleSheet.create({
   root: { flex: 1 },
   accountButton: { width: 42, height: 42, alignItems: 'center', justifyContent: 'center', borderRadius: 21, backgroundColor: colors.card },
-  mapTools: { position: 'absolute', top: 12, left: 12, right: 62, gap: 5, zIndex: 120 },
+  mapTools: { position: 'absolute', top: 88, left: 12, right: 12, gap: 5, zIndex: 120 },
   offlineNotice: { alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', gap: 6, borderRadius: radius.pill, paddingHorizontal: 11, paddingVertical: 6, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.orange },
   offlineNoticeTitle: { color: colors.orange, fontSize: 12, fontWeight: '800' },
   searchWrap: { minHeight: 42, flexDirection: 'row', alignItems: 'center', gap: 8, borderRadius: radius.md, paddingHorizontal: 11, backgroundColor: colors.card },
@@ -812,7 +812,7 @@ const styles = StyleSheet.create({
   routeError: { color: colors.red, fontSize: 12, fontWeight: '700' },
   dangerInstruction: { fontSize: 13, fontWeight: '800' },
   bottom: { position: 'absolute', left: 0, right: 0, bottom: 0, padding: 12 },
-  sosRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 },
+  topControls: { position: 'absolute', top: 12, left: 12, right: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', zIndex: 130 },
   mapActions: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   helpButtonPlaceholder: { width: 68, height: 68 },
   helpPage: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, backgroundColor: colors.bg },
