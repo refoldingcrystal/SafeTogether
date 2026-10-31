@@ -15,12 +15,13 @@ const NEEDS: { label: string; icon: IconName }[] = [
   { label: 'Medical', icon: 'medkit' },
   { label: 'Food', icon: 'restaurant' },
   { label: 'Transport', icon: 'bus' },
+  { label: 'Shelter', icon: 'home' },
 ];
 
 const ACTIONS: { id: 'sos' | 'safe' | FormKind; icon: IconName; label: string; color: string }[] = [
   { id: 'sos', icon: 'alert-circle', label: 'SOS', color: colors.red },
   { id: 'safe', icon: 'shield-checkmark', label: 'I’m safe', color: colors.green },
-  { id: 'shelter', icon: 'home', label: 'Shelter', color: colors.blue },
+  { id: 'shelter', icon: 'home', label: 'Offer shelter', color: colors.blue },
   { id: 'need', icon: 'hand-left', label: 'Need help', color: colors.orange },
   { id: 'danger', icon: 'warning', label: 'Danger', color: colors.redDark },
   { id: 'family', icon: 'chatbubble-ellipses', label: 'Family', color: colors.violet },
@@ -68,7 +69,7 @@ export function MeshCompose() {
     const suffix = note ? ` · ${note}` : '';
     const label =
       form === 'shelter'
-        ? `Shelter for ${Number(people)}${suffix}`
+        ? `Offering shelter for ${Number(people)}${suffix}`
         : form === 'need'
           ? `Need ${need.toLowerCase()}${suffix}`
           : form === 'danger'
@@ -112,7 +113,7 @@ export function MeshCompose() {
               value={people}
               onChangeText={setPeople}
               keyboardType="number-pad"
-              placeholder="How many people?"
+              placeholder="How many people can you take?"
               placeholderTextColor={colors.textDim}
               accessibilityLabel="How many people can you take"
             />

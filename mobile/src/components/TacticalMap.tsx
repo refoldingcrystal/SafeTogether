@@ -5,6 +5,7 @@ import { CurrentLocationButton } from '@/components/CurrentLocationButton';
 import { HelpOfferMapPopup } from '@/components/HelpOfferMapPopup';
 import { MapPlaceChooser } from '@/components/MapPlaceChooser';
 import MapView, { Circle, Marker, Polyline, UrlTile } from 'react-native-maps';
+import { Paths } from 'expo-file-system';
 import mock from '@/data/mock.json';
 import { categoryIcons, incidentColors } from '@/icons';
 import type { Incident } from '@/shared/models';
@@ -20,6 +21,8 @@ export type TacticalMapProps = {
   showBasement: boolean;
   showCommunityReports?: boolean;
   offline?: boolean;
+  offlineMapReady?: boolean;
+  offlineDemoRoads?: Coordinate[][];
   dangerZones?: DangerZone[];
   emergencySites?: EmergencySite[];
   nearbyPeople?: NearbyPerson[];
@@ -36,6 +39,9 @@ export type TacticalMapProps = {
 };
 
 const MAP_REGION = { latitude: 52.225, longitude: 20.995, latitudeDelta: 0.065, longitudeDelta: 0.11 };
+// Tiles seen while online are kept on the phone so the map still works in an outage.
+const TILE_CACHE_PATH = `${Paths.cache.uri.replace(/^file:\/\//, '')}map-tiles`;
+const TILE_CACHE_MAX_AGE = 30 * 24 * 60 * 60;
 const precisionRadius = { district: 450, neighborhood: 320, landmark: 200 } as const;
 function incidentPoint(incident: Incident): Coordinate | null {
   const { latitude, longitude } = incident.approximateLocation;
@@ -54,6 +60,8 @@ export function TacticalMap({
   showBasement,
   showCommunityReports = true,
   offline = false,
+  offlineMapReady = false,
+  offlineDemoRoads = [],
   dangerZones = [],
   emergencySites = [],
   nearbyPeople = [],
@@ -109,7 +117,7 @@ export function TacticalMap({
   }, [route, selected, shelling, sos, userLocation]);
 
   return (
-    <View style={styles.root} accessibilityLabel="Demonstration map powered by OpenStreetMap">
+    <View style={styles.root} accessibilityLabel="Map powered by OpenStreetMap">
       <MapView
         ref={map}
         style={StyleSheet.absoluteFill}
@@ -126,9 +134,14 @@ export function TacticalMap({
           maximumZ={19}
           maximumNativeZ={14}
           shouldReplaceMapContent={Platform.OS === 'ios'}
+          tileCachePath={TILE_CACHE_PATH}
+          tileCacheMaxAge={TILE_CACHE_MAX_AGE}
           offlineMode={offline}
           zIndex={0}
         />
+        {offline && offlineMapReady && offlineDemoRoads.map((road, index) => (
+          <Polyline key={`offline-road-${index}`} coordinates={road} strokeColor="#98A2B3" strokeWidth={5} zIndex={1} />
+        ))}
 
         {showCommunityReports && incidents.map((incident) => {
           const coordinate = incidentPoint(incident);

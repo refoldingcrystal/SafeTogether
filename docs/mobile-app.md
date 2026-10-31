@@ -58,6 +58,8 @@ OpenStreetMap is the intended map-data direction. Before implementation, the map
 
 The web map does not call `tile.openstreetmap.org` by default. Set `EXPO_PUBLIC_MAP_TILE_URL` and `EXPO_PUBLIC_MAP_TILE_ATTRIBUTION` only after an approved provider, contact details, caching behavior, and usage limits are documented. If the configured provider returns a tile error, the app stops requesting tiles and keeps the demonstration overlays visible rather than retrying a blocked service.
 
+After a successful online `/map` request, the mobile app saves the latest map snapshot on the device. When offline, it reloads the saved incidents, notices, help offers, danger zones, and safe locations, and shows when that snapshot was saved. The snapshot is bounded in size and may be stale; live people locations and help requests are not cached. On phones, map tiles viewed while online are cached for 30 days so the same map can still be panned, zoomed, and rotated offline; areas not viewed beforehand show a blank background. A bundled offline pack adds local places and preset routes. A production offline-map package still needs a licensed tile and routing provider.
+
 The public map must show approximate locations only. Exact locations, internal notes, private contact details, and unapproved attachments must never be placed in the mobile client’s public map data.
 
 ## Device capabilities

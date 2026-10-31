@@ -8,9 +8,11 @@ import { TacticalMap } from '@/components/TacticalMap';
 import { CoordinationChat, type CoordinationRequest } from '@/components/CoordinationChat';
 import { Button, Card, NeedHelpButton } from '@/components/ui';
 import mock from '@/data/mock.json';
+import { offlineDemoPlaces, offlineDemoRoads } from '@/data/offlineMapDemo';
 import { categoryIcons, incidentColors } from '@/icons';
 import { demonstrationDangerZones, demonstrationHelpOffers, demonstrationIncidents, emergencySites, nearbyPeople, type Coordinate, type DangerZone, type EmergencySite, type MapHelpOffer } from '@/shared/demo';
 import { api, type MapSnapshot } from '@/services/api';
+import { offlineMapSnapshotStore, type OfflineMapSnapshot } from '@/services/offlineMapSnapshotStore';
 import type { Incident, PersonalHelpCategory } from '@/shared/models';
 import { getApproximateCurrentLocation } from '@/shared/location';
 import { requestSafeRoadRoute, type SafeRoute } from '@/shared/routing';
@@ -32,6 +34,11 @@ export default function MapScreen() {
   const [safeRoute, setSafeRoute] = useState<SafeRoute | null>(null);
   const [routeLoading, setRouteLoading] = useState(false);
   const [routeError, setRouteError] = useState<string | null>(null);
+  const [mapSnapshotSavedAt, setMapSnapshotSavedAt] = useState<string | null>(null);
+  const [mapQuery, setMapQuery] = useState('');
+  const [mapSearchOpen, setMapSearchOpen] = useState(false);
+  const [navigationActive, setNavigationActive] = useState(false);
+  const [navigationStep, setNavigationStep] = useState(0);
   const [helpMenuOpen, setHelpMenuOpen] = useState(false);
   const [helpKind, setHelpKind] = useState<HelpKind | null>(null);
   const [request, setRequest] = useState('');
@@ -46,38 +53,66 @@ export default function MapScreen() {
   const [markingSafe, setMarkingSafe] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
 
+  const applyMapSnapshot = useCallback((snapshot: OfflineMapSnapshot) => {
+    setDangerZones(withDemonstrationHazards(snapshot.dangerZones));
+    setSites(withDemonstrationSites(toMapSites(snapshot)));
+    setHelpOffers(snapshot.helpFeed.flatMap((item) => {
+      const location = item.approximateLocation;
+      if (item.type !== 'offer' || item.isMine || location?.latitude == null || location.longitude == null) return [];
+      return [{ id: item.id, title: item.title, description: item.description, author: item.author, distance: item.distance, coordinate: { latitude: location.latitude, longitude: location.longitude } }];
+    }));
+    setAllIncidents(snapshot.incidents.map((item) => ({
+      id: item.id,
+      reporterName: item.reporterName,
+      category: item.category,
+      description: item.description,
+      approximateLocation: item.approximateLocation,
+      submittedAt: item.submittedAt,
+      updatedAt: item.updatedAt,
+      source: item.source,
+      verificationStatus: item.verificationStatus,
+    })));
+  }, []);
+
   useFocusEffect(useCallback(() => {
     let active = true;
+    if (app.offline) {
+      offlineMapSnapshotStore.load().then((saved) => {
+        if (!active) return;
+        if (saved) {
+          applyMapSnapshot(saved.snapshot);
+          setMapSnapshotSavedAt(saved.savedAt);
+        } else {
+          setDangerZones(demonstrationDangerZones);
+          setSites(offlineDemoPlaces);
+          setHelpOffers(demonstrationHelpOffers);
+          setAllIncidents(demonstrationIncidents);
+          setMapSnapshotSavedAt(null);
+        }
+        if (app.offlineSource === 'demo') setMapLocation(mock.me);
+      }).catch(() => undefined);
+      return () => { active = false; };
+    }
     api.getMap().then((snapshot: MapSnapshot) => {
       if (!active) return;
-      setDangerZones(withDemonstrationHazards(snapshot.dangerZones));
-      const mapSites = withDemonstrationSites(toMapSites(snapshot));
-      setSites(mapSites);
-      setHelpOffers(snapshot.helpFeed.flatMap((item) => {
-        const location = item.approximateLocation;
-        if (item.type !== 'offer' || location?.latitude == null || location.longitude == null) return [];
-        return [{ id: item.id, title: item.title, description: item.description, author: item.author, distance: item.distance, coordinate: { latitude: location.latitude, longitude: location.longitude } }];
-      }));
-      setAllIncidents(snapshot.incidents.map((item) => ({
-        id: item.id,
-        reporterName: item.reporterName,
-        category: item.category,
-        description: item.description,
-        approximateLocation: item.approximateLocation,
-        submittedAt: item.submittedAt,
-        updatedAt: item.updatedAt,
-        source: item.source,
-        verificationStatus: item.verificationStatus,
-      })));
-    }).catch(() => {
+      applyMapSnapshot(snapshot);
+      void offlineMapSnapshotStore.save(snapshot).then(setMapSnapshotSavedAt).catch(() => undefined);
+    }).catch(async () => {
       if (!active) return;
-      setDangerZones(demonstrationDangerZones);
-      setSites(emergencySites);
-      setHelpOffers(demonstrationHelpOffers);
-      setAllIncidents(demonstrationIncidents);
+      const saved = await offlineMapSnapshotStore.load();
+      if (!active) return;
+      if (saved) {
+        applyMapSnapshot(saved.snapshot);
+        setMapSnapshotSavedAt(saved.savedAt);
+      } else {
+        setDangerZones(demonstrationDangerZones);
+        setSites(emergencySites);
+        setHelpOffers(demonstrationHelpOffers);
+        setAllIncidents(demonstrationIncidents);
+      }
     });
     return () => { active = false; };
-  }, []));
+  }, [app.offline, app.offlineSource, applyMapSnapshot]));
 
   useEffect(() => {
     let active = true;
@@ -108,9 +143,26 @@ export default function MapScreen() {
       longitude: mapLocation.longitude + person.coordinate.longitude - mock.me.longitude,
     },
   })), [mapLocation]);
-  async function calculateRoute(start: Coordinate, destination: Coordinate) {
+  const matchingOfflinePlaces = useMemo(() => {
+    const savedPlaces = sites.map((site) => ({ ...site, searchText: `${site.title} ${site.summary}` }));
+    const placesById = new Map([...savedPlaces, ...offlineDemoPlaces].map((place) => [place.id, place] as const));
+    return [...placesById.values()]
+      .filter((place) => `${place.title} ${place.summary} ${place.searchText ?? ''}`.toLowerCase().includes(mapQuery.trim().toLowerCase()))
+      .slice(0, 5);
+  }, [mapQuery, sites]);
+
+  async function calculateRoute(start: Coordinate, destination: Coordinate, destinationId?: string) {
     if (app.offline) {
-      setRouteError('Offline — reconnect to calculate a road route.');
+      setRouteError(null);
+      setSafeRoute(null);
+      setNavigationActive(false);
+      setNavigationStep(0);
+      const place = offlineDemoPlaces.find((item) => item.id === destinationId);
+      if (!place) {
+        setRouteError('Offline, routes go to saved places only.');
+        return;
+      }
+      setSafeRoute({ ...place.route, demo: true });
       return;
     }
     setRouteLoading(true);
@@ -124,12 +176,38 @@ export default function MapScreen() {
     }
   }
 
+  function selectOfflinePlace(placeId: string) {
+    const place = offlineDemoPlaces.find((item) => item.id === placeId);
+    const savedPlace = sites.find((item) => item.id === placeId);
+    const title = place?.title ?? savedPlace?.title;
+    if (!title) return;
+    setMapQuery(title);
+    setMapSearchOpen(false);
+    setSelectedId(null);
+    setSelectedDangerId(null);
+    setSelectedSiteId(placeId);
+    setSafeRoute(null);
+    setRouteError(null);
+    setNavigationActive(false);
+  }
+
   async function submitHelpRequest() {
     if (!helpKind || submitting) return;
     setSubmitting(true);
     setSubmitError(null);
     let submitted = false;
     try {
+      if (app.offline) {
+        const packetKind = helpKind === 'Emergency' ? 'sos' : 'need';
+        const summary = (details || request || helpKind).trim();
+        // setSos queues the SOS itself while offline.
+        if (helpKind === 'Emergency') app.setSos(true);
+        else app.enqueue(packetKind, `${packetKind.toUpperCase()} · ${summary}`);
+        setHelpMenuOpen(false);
+        router.navigate('/mesh');
+        Alert.alert('Sent to phones nearby', 'Your request will be passed to nearby phones.');
+        return;
+      }
       const approximateLocation = await getApproximateCurrentLocation();
       if (helpKind === 'Request resources') {
         await api.createHelpRequest({ kind: 'resource', title: request || undefined, categories: [request || 'Other practical help'], description: details, approximateLocation });
@@ -194,13 +272,15 @@ export default function MapScreen() {
         shelling={app.shelling}
         sos={app.sos}
         route={app.route}
-        showBasement={app.p2pReceived}
+        showBasement={false}
         showCommunityReports
         offline={app.offline}
+        offlineMapReady
+        offlineDemoRoads={app.offline ? offlineDemoRoads : []}
         dangerZones={dangerZones}
         emergencySites={sites}
         nearbyPeople={mapNearbyPeople}
-        userLocation={mapLocation}
+        userLocation={app.offlineSource === 'demo' ? mock.me : mapLocation}
         helpOffers={helpOffers}
         plannedRoute={safeRoute?.coordinates}
         destination={customDestination ?? undefined}
@@ -222,6 +302,11 @@ export default function MapScreen() {
           setSelectedDangerId(null);
         }}
         onDestinationLongPress={(coordinate) => {
+          if (app.offline) {
+            setRouteError('Offline, routes go to saved places only.');
+            setSafeRoute(null);
+            return;
+          }
           setCustomDestination(coordinate);
           setSafeRoute(null);
           setRouteError(null);
@@ -231,6 +316,45 @@ export default function MapScreen() {
           void calculateRoute(mapLocation, coordinate);
         }}
       />
+
+      <View style={styles.mapTools}>
+        {app.offline && (
+          <View style={styles.offlineNotice} accessibilityLiveRegion="polite">
+            <Ionicons name="cloud-offline-outline" size={16} color={colors.orange} />
+            <Text style={styles.offlineNoticeTitle}>
+              Offline · saved map{mapSnapshotSavedAt ? ` from ${new Date(mapSnapshotSavedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : ''}
+            </Text>
+          </View>
+        )}
+        {app.offline && (
+          <View style={styles.searchWrap}>
+            <Ionicons name="search" size={18} color={colors.textMuted} />
+            <TextInput
+              value={mapQuery}
+              onChangeText={(value) => { setMapQuery(value); setMapSearchOpen(true); }}
+              onFocus={() => setMapSearchOpen(true)}
+              placeholder="Search places"
+              placeholderTextColor={colors.textDim}
+              style={styles.mapSearchInput}
+              accessibilityLabel="Search saved offline map"
+            />
+            {!!mapQuery && <Pressable onPress={() => setMapQuery('')} accessibilityRole="button" accessibilityLabel="Clear search"><Ionicons name="close-circle" size={18} color={colors.textDim} /></Pressable>}
+          </View>
+        )}
+        {app.offline && mapSearchOpen && !!mapQuery.trim() && (
+          <View style={styles.searchResults}>
+            {matchingOfflinePlaces.length ? matchingOfflinePlaces.map((place) => (
+              <Pressable key={place.id} onPress={() => selectOfflinePlace(place.id)} style={styles.searchResult}>
+                <Ionicons name={place.kind === 'shelter' ? 'home' : place.kind === 'aid' ? 'medkit' : 'shield-checkmark'} size={17} color={colors.green} />
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.searchResultTitle}>{place.title}</Text>
+                  <Text style={styles.searchResultMeta}>{place.summary}</Text>
+                </View>
+              </Pressable>
+            )) : <Text style={styles.searchResultMeta}>No places found.</Text>}
+          </View>
+        )}
+      </View>
 
       <Pressable onPress={() => router.push('/account')} accessibilityRole="button" accessibilityLabel="Account" style={styles.accountButton}>
         <Ionicons name="person-circle-outline" size={26} color={colors.text} />
@@ -245,7 +369,7 @@ export default function MapScreen() {
         <BottomCard
           selectedIncident={allIncidents.find((incident) => incident.id === selectedId)}
           selectedDanger={dangerZones.find((zone) => zone.id === selectedDangerId)}
-          selectedSite={sites.find((site) => site.id === selectedSiteId)}
+          selectedSite={sites.find((site) => site.id === selectedSiteId) ?? offlineDemoPlaces.find((site) => site.id === selectedSiteId)}
           safeRoute={safeRoute}
           routeLoading={routeLoading}
           routeError={routeError}
@@ -256,19 +380,28 @@ export default function MapScreen() {
             if (!nearestSafe) return;
             setSafeRoute(null);
             setRouteError(null);
-            void calculateRoute(mapLocation, nearestSafe.site.coordinate);
+            void calculateRoute(mapLocation, nearestSafe.site.coordinate, nearestSafe.site.id);
           }}
           onPlanSite={(site) => {
             setSafeRoute(null);
             setRouteError(null);
-            void calculateRoute(mapLocation, site.coordinate);
+            void calculateRoute(mapLocation, site.coordinate, site.id);
           }}
           onCloseRoute={() => {
             setSafeRoute(null);
             setRouteError(null);
             setCustomDestination(null);
+            setNavigationActive(false);
           }}
         onChat={(incident) => setActiveChat({ id: incident.id, author: incident.reporterName, title: incident.category })}
+          navigationActive={navigationActive}
+          navigationStep={navigationStep}
+          onStartNavigation={() => { setNavigationStep(0); setNavigationActive(true); }}
+          onNextNavigationStep={() => {
+            if (navigationStep >= (safeRoute?.navigationSteps?.length ?? 1) - 1) setNavigationActive(false);
+            else setNavigationStep((step) => step + 1);
+          }}
+          onEndNavigation={() => setNavigationActive(false)}
           onClose={() => {
             setSelectedId(null);
             setSelectedDangerId(null);
@@ -299,7 +432,7 @@ export default function MapScreen() {
   );
 }
 
-function toMapSites(snapshot: MapSnapshot): EmergencySite[] {
+function toMapSites(snapshot: Pick<MapSnapshot, 'emergencySites' | 'rendezvousPoints'>): EmergencySite[] {
   const rendezvous = snapshot.rendezvousPoints.flatMap((point) => {
     const { latitude, longitude } = point.location;
     if (latitude === undefined || longitude === undefined) return [];
@@ -328,6 +461,22 @@ function nearestSafeSite(sites: EmergencySite[], from: Coordinate) {
   }, null);
 }
 
+function NavigationPanel({ route, step, onNext, onEnd }: { route: SafeRoute; step: number; onNext: () => void; onEnd: () => void }) {
+  const steps = route.navigationSteps ?? [];
+  const currentStep = Math.min(step, Math.max(steps.length - 1, 0));
+  return (
+    <Animated.View entering={FadeInDown} key="offline-navigation">
+      <Card style={{ borderWidth: 2, borderColor: colors.green }}>
+        <Text style={[styles.kicker, { color: colors.green }]}>OFFLINE NAVIGATION · STEP {currentStep + 1} OF {steps.length}</Text>
+        <Text style={styles.title}>{steps[currentStep]}</Text>
+        <Text style={styles.muted}>Route · {route.distanceKm.toFixed(1)} km · {route.durationMinutes} min</Text>
+        <Button icon={currentStep + 1 === steps.length ? 'checkmark' : 'arrow-forward'} label={currentStep + 1 === steps.length ? 'Finish navigation' : 'Next direction'} color={colors.green} onPress={onNext} />
+        <Button label="End navigation" color={colors.textMuted} outline onPress={onEnd} />
+      </Card>
+    </Animated.View>
+  );
+}
+
 function distanceInKm(from: Coordinate, to: Coordinate) {
   const latitude = ((to.latitude - from.latitude) * Math.PI) / 180;
   const longitude = ((to.longitude - from.longitude) * Math.PI) / 180;
@@ -349,6 +498,11 @@ function BottomCard({
   onPlanSite,
   onCloseRoute,
   onChat,
+  navigationActive,
+  navigationStep,
+  onStartNavigation,
+  onNextNavigationStep,
+  onEndNavigation,
   onClose,
 }: {
   selectedIncident?: Incident;
@@ -364,6 +518,11 @@ function BottomCard({
   onPlanSite: (site: EmergencySite) => void;
   onCloseRoute: () => void;
   onChat: (incident: Incident) => void;
+  navigationActive: boolean;
+  navigationStep: number;
+  onStartNavigation: () => void;
+  onNextNavigationStep: () => void;
+  onEndNavigation: () => void;
   onClose: () => void;
 }) {
   const app = useApp();
@@ -396,13 +555,17 @@ function BottomCard({
             </View>
             <View style={{ flex: 1 }}>
               <Text style={styles.title}>Help request active</Text>
-              <Text style={styles.muted}>This demonstration has not contacted responders or other people.</Text>
+              <Text style={styles.muted}>This screen does not contact emergency services or notify other people.</Text>
             </View>
           </View>
           <Button icon="shield-checkmark" label={markingSafe ? 'Closing request…' : 'I am safe'} color={colors.green} disabled={markingSafe} onPress={onMarkSafe} />
         </Card>
       </Animated.View>
     );
+  }
+
+  if (navigationActive && safeRoute?.navigationSteps?.length) {
+    return <NavigationPanel route={safeRoute} step={navigationStep} onNext={onNextNavigationStep} onEnd={onEndNavigation} />;
   }
 
   if (routeLoading || safeRoute || routeError) {
@@ -414,12 +577,13 @@ function BottomCard({
               <Ionicons name={routeLoading ? 'hourglass' : routeError ? 'alert' : 'navigate'} size={21} color="#fff" />
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={[styles.kicker, { color: routeError ? colors.red : colors.green }]}>{routeLoading ? 'FINDING SAFE ROUTE' : routeError ? 'ROUTE UNAVAILABLE' : 'SAFE ROUTE ACTIVE'}</Text>
-              <Text style={styles.title}>{routeLoading ? 'Finding the shortest safe route…' : routeError ? 'Could not calculate a route' : 'Shortest route ready'}</Text>
+              <Text style={[styles.kicker, { color: routeError ? colors.red : colors.green }]}>{routeLoading ? 'FINDING SAFE ROUTE' : routeError ? 'ROUTE UNAVAILABLE' : safeRoute?.demo ? 'OFFLINE ROUTE' : 'SAFE ROUTE ACTIVE'}</Text>
+              <Text style={styles.title}>{routeLoading ? 'Finding the shortest safe route…' : routeError ? 'Could not calculate a route' : safeRoute?.demo ? 'Saved route ready' : 'Shortest route ready'}</Text>
             </View>
             <Pressable onPress={onCloseRoute} accessibilityRole="button" accessibilityLabel="Close route" hitSlop={10}><Ionicons name="close" size={22} color={colors.textDim} /></Pressable>
           </View>
-          {safeRoute && <Text style={styles.body}>{safeRoute.distanceKm.toFixed(1)} km · {safeRoute.durationMinutes} min · avoids {safeRoute.avoidedZoneIds.length} danger zone{safeRoute.avoidedZoneIds.length === 1 ? '' : 's'}</Text>}
+          {safeRoute && <Text style={styles.body}>{safeRoute.distanceKm.toFixed(1)} km · {safeRoute.durationMinutes} min{safeRoute.avoidedZoneIds.length ? ` · avoids ${safeRoute.avoidedZoneIds.length} saved danger zone${safeRoute.avoidedZoneIds.length === 1 ? '' : 's'}` : ''}</Text>}
+          {safeRoute?.navigationSteps?.length ? <Button icon="navigate" label="Start navigation" color={colors.green} onPress={onStartNavigation} /> : null}
           {routeError && <Text style={styles.routeError}>{routeError}</Text>}
         </Card>
       </Animated.View>
@@ -549,6 +713,15 @@ function Info({ icon, text }: { icon: keyof typeof Ionicons.glyphMap; text: stri
 const styles = StyleSheet.create({
   root: { flex: 1 },
   accountButton: { position: 'absolute', top: 12, right: 12, width: 42, height: 42, alignItems: 'center', justifyContent: 'center', borderRadius: 21, backgroundColor: colors.card },
+  mapTools: { position: 'absolute', top: 12, left: 12, right: 62, gap: 5, zIndex: 120 },
+  offlineNotice: { alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', gap: 6, borderRadius: radius.pill, paddingHorizontal: 11, paddingVertical: 6, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.orange },
+  offlineNoticeTitle: { color: colors.orange, fontSize: 12, fontWeight: '800' },
+  searchWrap: { minHeight: 42, flexDirection: 'row', alignItems: 'center', gap: 8, borderRadius: radius.md, paddingHorizontal: 11, backgroundColor: colors.card },
+  mapSearchInput: { flex: 1, color: colors.text, fontSize: 13, paddingVertical: 8 },
+  searchResults: { borderRadius: radius.md, padding: 9, gap: 8, backgroundColor: colors.card },
+  searchResult: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 4 },
+  searchResultTitle: { color: colors.text, fontSize: 12, fontWeight: '800' },
+  searchResultMeta: { color: colors.textMuted, fontSize: 10, lineHeight: 14 },
   routeError: { color: colors.red, fontSize: 12, fontWeight: '700' },
   dangerInstruction: { fontSize: 13, fontWeight: '800' },
   bottom: { position: 'absolute', left: 0, right: 0, bottom: 0, padding: 12 },

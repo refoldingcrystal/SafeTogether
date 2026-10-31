@@ -5,6 +5,8 @@ export type SafeRoute = {
   distanceKm: number;
   durationMinutes: number;
   avoidedZoneIds: string[];
+  navigationSteps?: string[];
+  demo?: boolean;
 };
 
 type OsrmRoute = {
