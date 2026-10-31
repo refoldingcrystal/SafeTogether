@@ -1,7 +1,7 @@
 import type { HelpCategory, Incident, IncidentCategory, OfficialNotice } from '@/shared/models';
 
 export type Coordinate = { latitude: number; longitude: number };
-export type DangerKind = 'attack' | 'fire' | 'flooding';
+export type DangerKind = 'attack' | 'fire' | 'flooding' | 'riot';
 export type DangerZone = {
   id: string;
   kind: DangerKind;
@@ -18,6 +18,13 @@ export type EmergencySite = {
   summary: string;
   coordinate: Coordinate;
   capacity?: string;
+};
+export type NearbyPerson = {
+  id: string;
+  name: string;
+  initials: string;
+  distance: string;
+  coordinate: Coordinate;
 };
 export type MapHelpOffer = { id: string; title: string; description?: string; author: string; distance: string; coordinate: Coordinate };
 
@@ -44,8 +51,8 @@ export const demonstrationDangerZones: DangerZone[] = [
   {
     id: 'DZ-01',
     kind: 'attack',
-    title: 'Attack reported',
-    summary: 'Reports of shelling. Stay indoors and avoid this area.',
+    title: 'Military attack reported (demo)',
+    summary: 'Demonstration alert: take cover indoors and avoid the area.',
     coordinate: { latitude: 52.2312, longitude: 21.0185 },
     radius: 700,
     severity: 'critical',
@@ -60,13 +67,13 @@ export const demonstrationDangerZones: DangerZone[] = [
     severity: 'high',
   },
   {
-    id: 'DZ-03',
-    kind: 'flooding',
-    title: 'Flooded underpass',
-    summary: 'Road is hazardous and may be impassable.',
-    coordinate: { latitude: 52.2395, longitude: 21.0305 },
-    radius: 450,
-    severity: 'medium',
+    id: 'DZ-04',
+    kind: 'riot',
+    title: 'Riot near the Constitutional Tribunal',
+    summary: 'Avoid the area and follow police instructions.',
+    coordinate: { latitude: 52.2156, longitude: 21.0236 },
+    radius: 380,
+    severity: 'high',
   },
 ];
 
@@ -74,9 +81,9 @@ export const emergencySites: EmergencySite[] = [
   {
     id: 'shelter-szczesliwice',
     kind: 'shelter',
-    title: 'Szczęśliwice shelter',
-    summary: 'Official evacuation shelter with water, medical support and transport.',
-    coordinate: { latitude: 52.202, longitude: 20.955 },
+    title: 'Emergency shelter',
+    summary: 'Water and basic first aid.',
+    coordinate: { latitude: 52.222, longitude: 20.984 },
     capacity: '1,200 places',
   },
   {
@@ -94,6 +101,13 @@ export const emergencySites: EmergencySite[] = [
     summary: 'Triage and basic first aid. Follow responder instructions.',
     coordinate: { latitude: 52.217, longitude: 21.003 },
   },
+];
+
+/** Nearby contacts are intentionally limited to three, so the emergency map stays readable. */
+export const nearbyPeople: NearbyPerson[] = [
+  { id: 'nearby-maya', name: 'Maya', initials: 'M', distance: '1.0 km', coordinate: { latitude: 52.2325, longitude: 21.008 } },
+  { id: 'nearby-alex', name: 'Alex', initials: 'A', distance: '1.2 km', coordinate: { latitude: 52.215, longitude: 20.986 } },
+  { id: 'nearby-lee', name: 'Lee', initials: 'L', distance: '1.1 km', coordinate: { latitude: 52.231, longitude: 20.9815 } },
 ];
 
 export const demonstrationHelpOffers: MapHelpOffer[] = [
