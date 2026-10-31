@@ -1,15 +1,13 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { Platform, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { CurrentLocationButton } from '@/components/CurrentLocationButton';
-import { HelpOfferMapPopup } from '@/components/HelpOfferMapPopup';
 import { MapPlaceChooser } from '@/components/MapPlaceChooser';
 import MapView, { Circle, Marker, Polyline, UrlTile } from 'react-native-maps';
 import { Paths } from 'expo-file-system';
 import mock from '@/data/mock.json';
 import { categoryIcons, incidentColors } from '@/icons';
 import type { Incident } from '@/shared/models';
-import type { Coordinate, DangerZone, EmergencySite, MapHelpOffer, NearbyPerson } from '@/shared/demo';
+import type { Coordinate, DangerZone, EmergencySite, MapHelpOffer, MapHelpRequest, NearbyPerson } from '@/shared/demo';
 import type { Route } from '@/state/app';
 import { groupMapPlaces, type MapPlaceItem } from '@/shared/mapPlaces';
 import { colors, shadow } from '@/theme';
@@ -27,6 +25,7 @@ export type TacticalMapProps = {
   emergencySites?: EmergencySite[];
   nearbyPeople?: NearbyPerson[];
   helpOffers?: MapHelpOffer[];
+  helpRequests?: MapHelpRequest[];
   plannedRoute?: Coordinate[];
   destination?: Coordinate;
   userLocation?: Coordinate;
@@ -35,6 +34,8 @@ export type TacticalMapProps = {
   onSelect: (id: string) => void;
   onSelectDanger?: (id: string) => void;
   onSelectSite?: (id: string) => void;
+  onSelectOffer?: (id: string) => void;
+  onSelectHelpRequest?: (id: string) => void;
   onDestinationLongPress?: (coordinate: Coordinate) => void;
 };
 
@@ -66,6 +67,7 @@ export function TacticalMap({
   emergencySites = [],
   nearbyPeople = [],
   helpOffers = [],
+  helpRequests = [],
   plannedRoute,
   destination,
   userLocation = mock.me,
@@ -74,14 +76,13 @@ export function TacticalMap({
   onSelect,
   onSelectDanger,
   onSelectSite,
+  onSelectOffer,
+  onSelectHelpRequest,
   onDestinationLongPress,
 }: TacticalMapProps) {
   const map = useRef<MapView>(null);
-  const [currentLocation, setCurrentLocation] = useState<Coordinate | null>(null);
-  const [selectedOfferId, setSelectedOfferId] = useState<string | null>(null);
   const [placeChoices, setPlaceChoices] = useState<MapPlaceItem[] | null>(null);
   const selected = useMemo(() => incidents.find((incident) => incident.id === selectedId), [incidents, selectedId]);
-  const selectedOffer = helpOffers.find((offer) => offer.id === selectedOfferId);
   const placeGroups = useMemo(() => {
     const items: MapPlaceItem[] = [];
     incidents.forEach((incident) => {
@@ -91,8 +92,9 @@ export function TacticalMap({
     dangerZones.forEach((zone) => items.push({ key: `danger:${zone.id}`, kind: 'danger', id: zone.id, title: zone.title, coordinate: zone.coordinate }));
     emergencySites.forEach((site) => items.push({ key: `site:${site.id}`, kind: 'site', id: site.id, title: site.title, coordinate: site.coordinate }));
     helpOffers.forEach((offer) => items.push({ key: `offer:${offer.id}`, kind: 'offer', id: offer.id, title: offer.title, coordinate: offer.coordinate }));
+    helpRequests.forEach((request) => items.push({ key: `request:${request.id}`, kind: 'request', id: request.id, title: request.title, coordinate: request.coordinate }));
     return groupMapPlaces(items);
-  }, [dangerZones, emergencySites, helpOffers, incidents]);
+  }, [dangerZones, emergencySites, helpOffers, helpRequests, incidents]);
   const groupedKeys = useMemo(() => new Set(placeGroups.flatMap((group) => group.items.map((item) => item.key))), [placeGroups]);
 
   function choosePlace(item: MapPlaceItem) {
@@ -100,7 +102,8 @@ export function TacticalMap({
     if (item.kind === 'incident') onSelect(item.id);
     else if (item.kind === 'danger') onSelectDanger?.(item.id);
     else if (item.kind === 'site') onSelectSite?.(item.id);
-    else setSelectedOfferId(item.id);
+    else if (item.kind === 'request') onSelectHelpRequest?.(item.id);
+    else onSelectOffer?.(item.id);
   }
 
   useEffect(() => {
@@ -213,15 +216,24 @@ export function TacticalMap({
         ))}
         {helpOffers.map((offer) => (
           groupedKeys.has(`offer:${offer.id}`) ? null :
-          <Marker key={offer.id} coordinate={offer.coordinate} zIndex={35} tracksViewChanges={false} onPress={() => setSelectedOfferId(offer.id)}>
+          <Marker key={offer.id} coordinate={offer.coordinate} zIndex={35} tracksViewChanges={false} onPress={() => onSelectOffer?.(offer.id)}>
             <View style={styles.offerMarker}>
               <Ionicons name="medkit" size={15} color="#fff" />
               <Text style={styles.offerMarkerLabel}>OFFER</Text>
             </View>
           </Marker>
         ))}
+        {helpRequests.map((request) => (
+          groupedKeys.has(`request:${request.id}`) ? null :
+          <Marker key={request.id} coordinate={request.coordinate} zIndex={36} tracksViewChanges={false} onPress={() => onSelectHelpRequest?.(request.id)}>
+            <View style={[styles.offerMarker, styles.requestMarker]}>
+              <Ionicons name="hand-left" size={15} color="#fff" />
+              <Text style={styles.offerMarkerLabel}>NEED</Text>
+            </View>
+          </Marker>
+        ))}
         {placeGroups.map((group) => (
-          <Marker key={group.key} coordinate={group.coordinate} zIndex={120} tracksViewChanges={false} onPress={() => { setSelectedOfferId(null); setPlaceChoices(group.items); }}>
+          <Marker key={group.key} coordinate={group.coordinate} zIndex={120} tracksViewChanges={false} onPress={() => setPlaceChoices(group.items)}>
             <View style={styles.placeGroupMarker}><Ionicons name="layers" size={15} color="#fff" /><Text style={styles.placeGroupCount}>{group.items.length}</Text></View>
           </Marker>
         ))}
@@ -241,7 +253,7 @@ export function TacticalMap({
             <View style={[styles.authorityMarker, { backgroundColor: authority.color }]}><Text style={styles.authorityLabel}>{authority.label}</Text></View>
           </Marker>
         ))}
-        <Marker coordinate={currentLocation ?? userLocation} anchor={{ x: 0.5, y: 0.5 }} zIndex={100} tracksViewChanges={false}>
+        <Marker coordinate={userLocation} anchor={{ x: 0.5, y: 0.5 }} zIndex={100} tracksViewChanges={false}>
           <View style={styles.myLocationMarker}>
             <View style={[styles.locationAccuracyRing, sos && styles.locationAccuracyRingSos]} />
             <View style={[styles.meMarker, sos && styles.meMarkerSos]}><Ionicons name={sos ? 'radio' : 'locate'} size={16} color="#fff" /></View>
@@ -249,12 +261,7 @@ export function TacticalMap({
           </View>
         </Marker>
       </MapView>
-      <CurrentLocationButton onLocation={(coordinate) => {
-        setCurrentLocation(coordinate);
-        map.current?.animateToRegion(regionAround(coordinate), 650);
-      }} />
       <MapPlaceChooser visible={placeChoices !== null} items={placeChoices ?? []} onChoose={choosePlace} onClose={() => setPlaceChoices(null)} />
-      {selectedOffer && <HelpOfferMapPopup offer={selectedOffer} onClose={() => setSelectedOfferId(null)} />}
       <View pointerEvents="none" style={styles.attribution}><Text style={styles.attributionText}>© OpenStreetMap contributors</Text></View>
     </View>
   );
@@ -290,6 +297,7 @@ const styles = StyleSheet.create({
   nearbyPersonLabel: { color: '#fff', fontSize: 10, fontWeight: '800' },
   offerMarker: { minWidth: 64, height: 34, borderRadius: 17, borderWidth: 3, borderColor: '#fff', backgroundColor: colors.green, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, paddingHorizontal: 7, ...shadow },
   offerMarkerLabel: { color: '#fff', fontSize: 9, fontWeight: '900', letterSpacing: 0.3 },
+  requestMarker: { backgroundColor: colors.red },
   placeGroupMarker: { width: 42, height: 42, borderRadius: 21, borderWidth: 3, borderColor: '#fff', backgroundColor: colors.text, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 2, ...shadow },
   placeGroupCount: { color: '#fff', fontSize: 12, fontWeight: '900' },
   destinationMarker: { width: 38, height: 38, borderRadius: 19, borderWidth: 3, borderColor: '#fff', backgroundColor: colors.text, alignItems: 'center', justifyContent: 'center', ...shadow },

@@ -6,7 +6,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Button, Card, Pill } from '@/components/ui';
 import { CoordinationChat } from '@/components/CoordinationChat';
 import mock from '@/data/mock.json';
-import { helpCategories } from '@/shared/demo';
+import { demonstrationIncidents, helpCategories } from '@/shared/demo';
 import { useApp } from '@/state/app';
 import { getApproximateCurrentLocation } from '@/shared/location';
 import type { HelpCategory } from '@/shared/models';
@@ -14,6 +14,25 @@ import { api, type HelpFeedItem as ApiHelpFeedItem } from '@/services/api';
 import { colors, radius, shadow } from '@/theme';
 
 type HelpFeedItem = ApiHelpFeedItem;
+
+function demonstrationHelpFeed(): HelpFeedItem[] {
+  const demoRequests = demonstrationIncidents.map((incident) => ({
+    id: incident.id,
+    type: 'request' as const,
+    kind: 'emergency',
+    icon: incident.category === 'Injured' ? 'medkit' : incident.category === 'Stranded' ? 'walk' : incident.category === 'Lost' ? 'search' : 'help-circle',
+    title: incident.category,
+    author: incident.reporterName,
+    distance: incident.approximateLocation.label,
+    tags: [incident.category],
+    description: incident.description,
+    isMine: false,
+    status: 'active',
+    createdAt: incident.updatedAt,
+    approximateLocation: incident.approximateLocation,
+  }));
+  return [...(mock.helpFeed as HelpFeedItem[]), ...demoRequests];
+}
 type HelpFeedFilter = 'all' | 'shelter' | 'food' | 'medical' | 'transport' | 'other';
 
 const HELP_FILTERS: { id: HelpFeedFilter; label: string; emoji?: string }[] = [
@@ -65,7 +84,7 @@ export default function HelpScreen() {
   const [activeFilter, setActiveFilter] = useState<HelpFeedFilter>('all');
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
   const [description, setDescription] = useState('');
-  const [feedItems, setFeedItems] = useState<HelpFeedItem[]>(mock.helpFeed as HelpFeedItem[]);
+  const [feedItems, setFeedItems] = useState<HelpFeedItem[]>(demonstrationHelpFeed);
   const [editingOfferId, setEditingOfferId] = useState<string | null>(null);
   const [activeChat, setActiveChat] = useState<HelpFeedItem | null>(null);
   const visibleFeedItems = useMemo(() => feedItems
@@ -74,7 +93,7 @@ export default function HelpScreen() {
 
   useFocusEffect(useCallback(() => {
     let active = true;
-    api.getHelpFeed().then((items) => { if (active) setFeedItems(items); }).catch(() => { if (active) setFeedItems(mock.helpFeed as HelpFeedItem[]); });
+    api.getHelpFeed().then((items) => { if (active) setFeedItems(items); }).catch(() => { if (active) setFeedItems(demonstrationHelpFeed()); });
     return () => { active = false; };
   }, []));
 
@@ -309,7 +328,7 @@ function HelpItem({ item, index, onEdit, onStop, onChat }: { item: HelpFeedItem;
           <Text style={styles.heading}>{emoji} {categoryHeading}</Text>
           <Text style={styles.cardTitle}>{cardTitle}</Text>
           <Text style={styles.meta}>
-            {item.author} · {item.distance}
+            {offer && item.isMine ? 'Offered by you' : offer ? `Offered by ${item.author}` : `Requested by ${item.author}`} · {item.distance}
           </Text>
         </View>
         {!offer && item.tags.length > 0 && (
@@ -326,6 +345,7 @@ function HelpItem({ item, index, onEdit, onStop, onChat }: { item: HelpFeedItem;
           <View style={styles.offerActions}>
             <Button icon="create-outline" label="Edit offering" color={colors.green} outline onPress={() => onEdit?.(item)} />
             <Button icon="close-circle-outline" label="Stop offering" color={colors.red} outline onPress={() => onStop?.(item.id)} />
+            <Button icon="chatbubble-ellipses" label="Chat" color={colors.blue} outline onPress={() => onChat?.(item)} />
           </View>
         ) : !offer && !item.isMine ? (
           <Button icon="chatbubble-ellipses" label="Chat" color={colors.blue} onPress={() => onChat?.(item)} />

@@ -27,6 +27,7 @@ export type NearbyPerson = {
   coordinate: Coordinate;
 };
 export type MapHelpOffer = { id: string; title: string; description?: string; author: string; distance: string; coordinate: Coordinate };
+export type MapHelpRequest = MapHelpOffer;
 
 export const incidentCategories: PersonalHelpCategory[] = ['Injured', 'Stranded', 'Lost', 'Other personal assistance'];
 export const helpCategories: HelpCategory[] = ['Shelter', 'Food and water', 'Transport', 'Qualified first aid', 'Supplies', 'Other practical help'];

@@ -6,11 +6,12 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
 import { TacticalMap } from '@/components/TacticalMap';
 import { CoordinationChat, type CoordinationRequest } from '@/components/CoordinationChat';
+import { CurrentLocationButton } from '@/components/CurrentLocationButton';
 import { Button, Card, NeedHelpButton } from '@/components/ui';
 import mock from '@/data/mock.json';
 import { offlineDemoPlaces, offlineDemoRoads } from '@/data/offlineMapDemo';
 import { categoryIcons, incidentColors } from '@/icons';
-import { demonstrationDangerZones, demonstrationHelpOffers, demonstrationIncidents, emergencySites, nearbyPeople, type Coordinate, type DangerZone, type EmergencySite, type MapHelpOffer } from '@/shared/demo';
+import { demonstrationDangerZones, demonstrationHelpOffers, demonstrationIncidents, emergencySites, nearbyPeople, type Coordinate, type DangerZone, type EmergencySite, type MapHelpOffer, type MapHelpRequest } from '@/shared/demo';
 import { api, type MapSnapshot } from '@/services/api';
 import { offlineMapSnapshotStore, type OfflineMapSnapshot } from '@/services/offlineMapSnapshotStore';
 import type { Incident, PersonalHelpCategory } from '@/shared/models';
@@ -30,6 +31,8 @@ export default function MapScreen() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [selectedDangerId, setSelectedDangerId] = useState<string | null>(null);
   const [selectedSiteId, setSelectedSiteId] = useState<string | null>(null);
+  const [selectedOfferId, setSelectedOfferId] = useState<string | null>(null);
+  const [selectedHelpRequestId, setSelectedHelpRequestId] = useState<string | null>(null);
   const [customDestination, setCustomDestination] = useState<Coordinate | null>(null);
   const [safeRoute, setSafeRoute] = useState<SafeRoute | null>(null);
   const [routeLoading, setRouteLoading] = useState(false);
@@ -46,8 +49,10 @@ export default function MapScreen() {
   const [dangerZones, setDangerZones] = useState(demonstrationDangerZones);
   const [sites, setSites] = useState(emergencySites);
   const [helpOffers, setHelpOffers] = useState<MapHelpOffer[]>(demonstrationHelpOffers);
+  const [helpRequests, setHelpRequests] = useState<MapHelpRequest[]>([]);
   const [allIncidents, setAllIncidents] = useState(demonstrationIncidents);
   const [mapLocation, setMapLocation] = useState<Coordinate>(mock.me);
+  const [currentLocationOverride, setCurrentLocationOverride] = useState<Coordinate | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [activeIncidentId, setActiveIncidentId] = useState<string | null>(null);
   const [markingSafe, setMarkingSafe] = useState(false);
@@ -59,6 +64,11 @@ export default function MapScreen() {
     setHelpOffers(snapshot.helpFeed.flatMap((item) => {
       const location = item.approximateLocation;
       if (item.type !== 'offer' || item.isMine || location?.latitude == null || location.longitude == null) return [];
+      return [{ id: item.id, title: item.title, description: item.description, author: item.author, distance: item.distance, coordinate: { latitude: location.latitude, longitude: location.longitude } }];
+    }));
+    setHelpRequests(snapshot.helpFeed.flatMap((item) => {
+      const location = item.approximateLocation;
+      if (item.type !== 'request' || item.isMine || location?.latitude == null || location.longitude == null) return [];
       return [{ id: item.id, title: item.title, description: item.description, author: item.author, distance: item.distance, coordinate: { latitude: location.latitude, longitude: location.longitude } }];
     }));
     setAllIncidents(snapshot.incidents.map((item) => ({
@@ -86,6 +96,7 @@ export default function MapScreen() {
           setDangerZones(demonstrationDangerZones);
           setSites(offlineDemoPlaces);
           setHelpOffers(demonstrationHelpOffers);
+          setHelpRequests([]);
           setAllIncidents(demonstrationIncidents);
           setMapSnapshotSavedAt(null);
         }
@@ -108,6 +119,7 @@ export default function MapScreen() {
         setDangerZones(demonstrationDangerZones);
         setSites(emergencySites);
         setHelpOffers(demonstrationHelpOffers);
+        setHelpRequests([]);
         setAllIncidents(demonstrationIncidents);
       }
     });
@@ -226,10 +238,7 @@ export default function MapScreen() {
       if (helpKind !== 'Request resources') app.setSos(true);
       try {
         const snapshot = await api.getMap();
-        setDangerZones(withDemonstrationHazards(snapshot.dangerZones));
-        const mapSites = withDemonstrationSites(toMapSites(snapshot));
-        setSites(mapSites);
-        setAllIncidents(snapshot.incidents.map((item) => ({ id: item.id, reporterName: item.reporterName, category: item.category, description: item.description, approximateLocation: item.approximateLocation, submittedAt: item.submittedAt, updatedAt: item.updatedAt, source: item.source, verificationStatus: item.verificationStatus })));
+        applyMapSnapshot(snapshot);
       } catch { /* The submission succeeded; keep the currently loaded map. */ }
     } catch (error) {
       if (submitted) {
@@ -280,8 +289,9 @@ export default function MapScreen() {
         dangerZones={dangerZones}
         emergencySites={sites}
         nearbyPeople={mapNearbyPeople}
-        userLocation={app.offlineSource === 'demo' ? mock.me : mapLocation}
+        userLocation={currentLocationOverride ?? (app.offlineSource === 'demo' ? mock.me : mapLocation)}
         helpOffers={helpOffers}
+        helpRequests={helpRequests}
         plannedRoute={safeRoute?.coordinates}
         destination={customDestination ?? undefined}
         incidents={incidents}
@@ -290,16 +300,36 @@ export default function MapScreen() {
           setSelectedId((current) => current === id ? null : id);
           setSelectedDangerId(null);
           setSelectedSiteId(null);
+          setSelectedOfferId(null);
+          setSelectedHelpRequestId(null);
         }}
         onSelectDanger={(id) => {
           setSelectedDangerId((current) => current === id ? null : id);
           setSelectedId(null);
           setSelectedSiteId(null);
+          setSelectedOfferId(null);
+          setSelectedHelpRequestId(null);
         }}
         onSelectSite={(id) => {
           setSelectedSiteId((current) => current === id ? null : id);
           setSelectedId(null);
           setSelectedDangerId(null);
+          setSelectedOfferId(null);
+          setSelectedHelpRequestId(null);
+        }}
+        onSelectOffer={(id) => {
+          setSelectedOfferId((current) => current === id ? null : id);
+          setSelectedHelpRequestId(null);
+          setSelectedId(null);
+          setSelectedDangerId(null);
+          setSelectedSiteId(null);
+        }}
+        onSelectHelpRequest={(id) => {
+          setSelectedHelpRequestId((current) => current === id ? null : id);
+          setSelectedOfferId(null);
+          setSelectedId(null);
+          setSelectedDangerId(null);
+          setSelectedSiteId(null);
         }}
         onDestinationLongPress={(coordinate) => {
           if (app.offline) {
@@ -313,6 +343,7 @@ export default function MapScreen() {
           setSelectedId(null);
           setSelectedDangerId(null);
           setSelectedSiteId(null);
+          setSelectedOfferId(null);
           void calculateRoute(mapLocation, coordinate);
         }}
       />
@@ -356,20 +387,22 @@ export default function MapScreen() {
         )}
       </View>
 
-      <Pressable onPress={() => router.push('/account')} accessibilityRole="button" accessibilityLabel="Account" style={styles.accountButton}>
-        <Ionicons name="person-circle-outline" size={26} color={colors.text} />
-      </Pressable>
-
       <View style={styles.bottom} pointerEvents="box-none">
-        {!app.sos && (
-          <View style={styles.sosRow} pointerEvents="box-none">
-            <NeedHelpButton onPress={openHelpMenu} />
+        <View style={styles.sosRow} pointerEvents="box-none">
+          {!app.sos ? <NeedHelpButton onPress={openHelpMenu} /> : <View style={styles.helpButtonPlaceholder} />}
+          <View style={styles.mapActions}>
+            <CurrentLocationButton onLocation={(coordinate) => { setMapLocation(coordinate); setCurrentLocationOverride(coordinate); }} />
+            <Pressable onPress={() => router.push('/account')} accessibilityRole="button" accessibilityLabel="Account" style={styles.accountButton}>
+              <Ionicons name="person-circle-outline" size={26} color={colors.text} />
+            </Pressable>
           </View>
-        )}
+        </View>
         <BottomCard
           selectedIncident={allIncidents.find((incident) => incident.id === selectedId)}
           selectedDanger={dangerZones.find((zone) => zone.id === selectedDangerId)}
           selectedSite={sites.find((site) => site.id === selectedSiteId) ?? offlineDemoPlaces.find((site) => site.id === selectedSiteId)}
+          selectedOffer={helpOffers.find((offer) => offer.id === selectedOfferId)}
+          selectedHelpRequest={helpRequests.find((request) => request.id === selectedHelpRequestId)}
           safeRoute={safeRoute}
           routeLoading={routeLoading}
           routeError={routeError}
@@ -394,6 +427,8 @@ export default function MapScreen() {
             setNavigationActive(false);
           }}
         onChat={(incident) => setActiveChat({ id: incident.id, author: incident.reporterName, title: incident.category })}
+          onChatOffer={(offer) => setActiveChat({ id: offer.id, author: offer.author, title: offer.title })}
+          onChatHelpRequest={(request) => setActiveChat({ id: request.id, author: request.author, title: request.title })}
           navigationActive={navigationActive}
           navigationStep={navigationStep}
           onStartNavigation={() => { setNavigationStep(0); setNavigationActive(true); }}
@@ -406,6 +441,8 @@ export default function MapScreen() {
             setSelectedId(null);
             setSelectedDangerId(null);
             setSelectedSiteId(null);
+            setSelectedOfferId(null);
+            setSelectedHelpRequestId(null);
           }}
         />
       </View>
@@ -488,6 +525,8 @@ function BottomCard({
   selectedIncident,
   selectedDanger,
   selectedSite,
+  selectedOffer,
+  selectedHelpRequest,
   safeRoute,
   routeLoading,
   routeError,
@@ -498,6 +537,8 @@ function BottomCard({
   onPlanSite,
   onCloseRoute,
   onChat,
+  onChatOffer,
+  onChatHelpRequest,
   navigationActive,
   navigationStep,
   onStartNavigation,
@@ -508,6 +549,8 @@ function BottomCard({
   selectedIncident?: Incident;
   selectedDanger?: DangerZone;
   selectedSite?: EmergencySite;
+  selectedOffer?: MapHelpOffer;
+  selectedHelpRequest?: MapHelpRequest;
   safeRoute: SafeRoute | null;
   routeLoading: boolean;
   routeError: string | null;
@@ -518,6 +561,8 @@ function BottomCard({
   onPlanSite: (site: EmergencySite) => void;
   onCloseRoute: () => void;
   onChat: (incident: Incident) => void;
+  onChatOffer: (offer: MapHelpOffer) => void;
+  onChatHelpRequest: (request: MapHelpRequest) => void;
   navigationActive: boolean;
   navigationStep: number;
   onStartNavigation: () => void;
@@ -635,6 +680,48 @@ function BottomCard({
     );
   }
 
+  if (selectedOffer) {
+    return (
+      <Animated.View entering={FadeInDown} key={selectedOffer.id}>
+        <Card style={{ borderLeftWidth: 5, borderLeftColor: colors.green }}>
+          <View style={styles.row}>
+            <View style={[styles.incidentIcon, { backgroundColor: colors.green }]}>
+              <Ionicons name="hand-left" size={21} color="#fff" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.kicker, { color: colors.green }]}>HELP OFFER</Text>
+              <Text style={styles.title}>{selectedOffer.title}</Text>
+            </View>
+            <Pressable onPress={onClose} accessibilityRole="button" accessibilityLabel="Close" hitSlop={10}><Ionicons name="close" size={22} color={colors.textDim} /></Pressable>
+          </View>
+          <Text style={styles.muted}>Offered by {selectedOffer.author} · {selectedOffer.distance}</Text>
+          {selectedOffer.description && <Text style={styles.body}>{selectedOffer.description}</Text>}
+          <Button icon="chatbubble-ellipses" label="Chat" color={colors.blue} onPress={() => onChatOffer(selectedOffer)} />
+        </Card>
+      </Animated.View>
+    );
+  }
+
+  if (selectedHelpRequest) {
+    return (
+      <Animated.View entering={FadeInDown} key={selectedHelpRequest.id}>
+        <Card style={{ borderLeftWidth: 5, borderLeftColor: colors.red }}>
+          <View style={styles.row}>
+            <View style={[styles.incidentIcon, { backgroundColor: colors.red }]}><Ionicons name="help" size={21} color="#fff" /></View>
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.kicker, { color: colors.red }]}>HELP REQUEST</Text>
+              <Text style={styles.title}>{selectedHelpRequest.title}</Text>
+            </View>
+            <Pressable onPress={onClose} accessibilityRole="button" accessibilityLabel="Close" hitSlop={10}><Ionicons name="close" size={22} color={colors.textDim} /></Pressable>
+          </View>
+          <Text style={styles.muted}>Requested by {selectedHelpRequest.author} · {selectedHelpRequest.distance}</Text>
+          {selectedHelpRequest.description && <Text style={styles.body}>{selectedHelpRequest.description}</Text>}
+          <Button icon="chatbubble-ellipses" label="Chat" color={colors.blue} onPress={() => onChatHelpRequest(selectedHelpRequest)} />
+        </Card>
+      </Animated.View>
+    );
+  }
+
   if (incident) {
     const color = incidentColors[incident.category] ?? colors.blue;
     return (
@@ -712,7 +799,7 @@ function Info({ icon, text }: { icon: keyof typeof Ionicons.glyphMap; text: stri
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
-  accountButton: { position: 'absolute', top: 12, right: 12, width: 42, height: 42, alignItems: 'center', justifyContent: 'center', borderRadius: 21, backgroundColor: colors.card },
+  accountButton: { width: 42, height: 42, alignItems: 'center', justifyContent: 'center', borderRadius: 21, backgroundColor: colors.card },
   mapTools: { position: 'absolute', top: 12, left: 12, right: 62, gap: 5, zIndex: 120 },
   offlineNotice: { alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', gap: 6, borderRadius: radius.pill, paddingHorizontal: 11, paddingVertical: 6, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.orange },
   offlineNoticeTitle: { color: colors.orange, fontSize: 12, fontWeight: '800' },
@@ -725,7 +812,9 @@ const styles = StyleSheet.create({
   routeError: { color: colors.red, fontSize: 12, fontWeight: '700' },
   dangerInstruction: { fontSize: 13, fontWeight: '800' },
   bottom: { position: 'absolute', left: 0, right: 0, bottom: 0, padding: 12 },
-  sosRow: { alignItems: 'flex-start', marginBottom: 4 },
+  sosRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 },
+  mapActions: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  helpButtonPlaceholder: { width: 68, height: 68 },
   helpPage: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, backgroundColor: colors.bg },
   helpContent: { padding: 20, paddingBottom: 40, gap: 12 },
   helpHeader: { flexDirection: 'row', alignItems: 'flex-start', gap: 12 },

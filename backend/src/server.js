@@ -130,6 +130,7 @@ const HELP_CATEGORIES = ['Shelter', 'Food and water', 'Transport', 'Qualified fi
 const PERSONAL_HELP_CATEGORIES = ['Injured', 'Stranded', 'Lost', 'Other personal assistance'];
 const LEGACY_PERSONAL_HELP_CATEGORIES = ['Medical emergency', 'Trapped person', 'Missing person'];
 const HELP_ICONS = { 'Shelter': 'home', 'Food and water': 'water', 'Transport': 'bus', 'Qualified first aid': 'medkit', 'Supplies': 'cube', 'Other practical help': 'hand-left' };
+const PERSONAL_HELP_ICONS = { Injured: 'medkit', Stranded: 'walk', Lost: 'search', 'Other personal assistance': 'help-circle', 'Medical emergency': 'medkit', 'Trapped person': 'warning', 'Missing person': 'search' };
 function normalizeHelpKind(value) {
   return ({ resource: 'resource', 'Request resources': 'resource', emergency: 'emergency', Emergency: 'emergency' })[value] || null;
 }
@@ -167,6 +168,16 @@ function publicHelpRequest(request, viewerId) {
     id: request.id, type: 'request', kind: request.kind, icon: request.icon || 'hand-left', title: request.title,
     author: displayName(request.requesterId), isMine: request.requesterId === viewerId, distance: request.approximateLocation?.label || 'Location not shared',
     tags: request.tags, description: request.description || undefined, status: request.status, createdAt: request.createdAt,
+    approximateLocation: request.approximateLocation || null,
+  };
+}
+function publicIncidentRequest(incident, viewerId) {
+  return {
+    id: incident.id, type: 'request', kind: 'emergency', icon: PERSONAL_HELP_ICONS[incident.category] || 'hand-left',
+    title: incident.category, author: displayName(incident.reporterId),
+    distance: incident.approximateLocation?.label || 'Location not shared', tags: [incident.category],
+    description: incident.description || undefined, isMine: incident.reporterId === viewerId,
+    status: incident.status, createdAt: incident.submittedAt, approximateLocation: incident.approximateLocation || null,
   };
 }
 function publicIncident(incident) {
@@ -179,8 +190,10 @@ function isPersonalHelpIncident(incident) {
 function helpFeed(viewerId) {
   return [
     ...db.helpRequests.filter((request) => request.status === 'active' && request.kind === 'resource').map((request) => publicHelpRequest(request, viewerId)),
+    ...db.incidents.filter((incident) => isPersonalHelpIncident(incident) && incident.status !== 'rejected').map((incident) => publicIncidentRequest(incident, viewerId)),
     ...db.offers.filter((offer) => offer.status === 'active').map((offer) => publicOffer(offer, viewerId)),
-  ].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  ].filter((item) => item.type === 'offer' || !item.isMine)
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 }
 async function route(req, res) {
   const url = new URL(req.url, 'http://localhost');
@@ -226,7 +239,7 @@ async function route(req, res) {
   if (resource === 'auth' && method === 'GET' && parts[2] === 'me') return send(res, 200, { user: publicUser(user) });
 
   if (resource === 'map' && method === 'GET') {
-    const incidents = db.incidents.filter((item) => item.status !== 'rejected' && isPersonalHelpIncident(item)).map(publicIncident);
+    const incidents = db.incidents.filter((item) => item.status !== 'rejected' && isPersonalHelpIncident(item) && item.reporterId !== user.id).map(publicIncident);
     const notices = db.notices.filter((item) => item.status === 'published' && (!item.expiresAt || item.expiresAt > now()));
     const rendezvousPoints = db.rendezvousPoints.filter((item) => item.status === 'active');
     const emergencySites = db.emergencySites.filter((item) => item.status === 'active');
@@ -269,25 +282,27 @@ async function route(req, res) {
     row.updatedAt = now(); audit(user.id, 'help_request_updated', 'help_request', row.id, { status: row.status }); await persist();
     return send(res, 200, { data: publicHelpRequest(row, user.id) });
   }
-  if (resource === 'help-requests' && method === 'GET' && recordId && parts[3] === 'messages') {
+  if (['help-requests', 'conversations'].includes(resource) && method === 'GET' && recordId && parts[3] === 'messages') {
     const request = db.helpRequests.find((item) => item.id === recordId);
     const incident = db.incidents.find((item) => item.id === recordId && isPersonalHelpIncident(item) && item.status !== 'rejected');
-    const row = request || incident; if (!row) throw fail(404, 'Help request not found');
-    if (!row.participants?.includes(user.id) && row.requesterId !== user.id && row.reporterId !== user.id && user.role !== 'authority') {
+    const offer = db.offers.find((item) => item.id === recordId && item.status === 'active');
+    const row = request || incident || offer; if (!row) throw fail(404, 'Conversation not found');
+    if (!row.participants?.includes(user.id) && row.requesterId !== user.id && row.reporterId !== user.id && row.ownerId !== user.id && user.role !== 'authority') {
       if (request) throw fail(403, 'Join the conversation by sending a message first');
       return send(res, 200, { data: [] });
     }
     return send(res, 200, { data: db.messages.filter((message) => message.requestId === row.id).map((message) => ({ ...message, isMine: message.senderId === user.id, sentAt: message.createdAt })) });
   }
-  if (resource === 'help-requests' && method === 'POST' && recordId && parts[3] === 'messages') {
+  if (['help-requests', 'conversations'].includes(resource) && method === 'POST' && recordId && parts[3] === 'messages') {
     const request = db.helpRequests.find((item) => item.id === recordId && item.status === 'active');
     const incident = db.incidents.find((item) => item.id === recordId && isPersonalHelpIncident(item) && item.status !== 'rejected');
-    const row = request || incident; if (!row) throw fail(404, 'Active help request not found');
+    const offer = db.offers.find((item) => item.id === recordId && item.status === 'active');
+    const row = request || incident || offer; if (!row) throw fail(404, 'Active help or offer not found');
     const body = await readBody(req); const text = clean(body.text, 1000); if (!text) throw fail(400, 'Message text is required');
-    if (!row.participants) row.participants = row.requesterId || row.reporterId ? [row.requesterId || row.reporterId] : [];
+    if (!row.participants) row.participants = row.requesterId || row.reporterId || row.ownerId ? [row.requesterId || row.reporterId || row.ownerId] : [];
     if (!row.participants.includes(user.id)) row.participants.push(user.id);
     const message = { id: id('msg'), requestId: row.id, senderId: user.id, senderName: user.name, text, createdAt: now() };
-    db.messages.push(message); row.updatedAt = now(); audit(user.id, 'help_message_sent', incident ? 'incident' : 'help_request', row.id); await persist();
+    db.messages.push(message); row.updatedAt = now(); audit(user.id, 'help_message_sent', incident ? 'incident' : offer ? 'offer' : 'help_request', row.id); await persist();
     return send(res, 201, { data: { ...message, isMine: true, sentAt: message.createdAt } });
   }
 
