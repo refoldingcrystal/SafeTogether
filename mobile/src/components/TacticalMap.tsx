@@ -211,10 +211,10 @@ const styles = StyleSheet.create({
 
 const dangerColors = { attack: colors.red, fire: '#F04438', flooding: colors.violet } as const;
 const dangerIcons = { attack: 'warning', fire: 'flame', flooding: 'water' } as const;
-const dangerLabels = { attack: 'ATAK', fire: 'POŻAR', flooding: 'ZALANIE' } as const;
+const dangerLabels = { attack: 'ATTACK', fire: 'FIRE', flooding: 'FLOOD' } as const;
 const siteColors = { shelter: colors.green, safe_zone: colors.blue, aid: colors.orange } as const;
 const siteIcons = { shelter: 'bed', safe_zone: 'shield-checkmark', aid: 'medkit' } as const;
-const siteLabels = { shelter: 'SCHRON', safe_zone: 'SAFE', aid: 'POMOC' } as const;
+const siteLabels = { shelter: 'SHELTER', safe_zone: 'SAFE ZONE', aid: 'AID' } as const;
 
 function heatColor(color: string, factor: number) {
   const alpha = factor === 1 ? 0.12 : factor === 0.7 ? 0.14 : 0.2;
