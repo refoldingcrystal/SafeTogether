@@ -40,14 +40,14 @@ Expo Go is suitable for the current project. If a future change adds a native mo
 | Collaborator | Feature outcome | First focus | Likely touchpoints |
 |---|---|---|---|
 | Collaborator 1 | Map panel | Demonstration map, incident markers, official notices, filters, connectivity states, and OpenStreetMap integration | `mobile/src/app/(tabs)/index.tsx`, map components, shared incident and notice data |
-| Collaborator 2 | Report panel | Native report form, validation, confirmation, draft preservation, retry states, and report privacy | `mobile/src/app/(tabs)/report.tsx`, shared incident data |
+| Collaborator 2 | Need help action | Map-based request state, clear confirmation, location-sharing disclosure, cancellation, and accessibility | `mobile/src/app/(tabs)/index.tsx`, `mobile/src/components/ui.tsx`, shared app state |
 | Collaborator 3 | Mesh panel | Offline and peer-to-peer status, connection states, queued-action visibility, graceful fallbacks, and privacy messaging | `mobile/src/app/(tabs)/mesh.tsx`, `mobile/src/components/MeshRadar.tsx`, shared connectivity state |
 | Collaborator 4 | Help panel | Neighbour help feed, requests, offer discovery, empty/offline states, and the offer-help flow | `mobile/src/app/(tabs)/feed.tsx`, `mobile/src/app/(tabs)/offer.tsx`, shared help-offer data |
 | Collaborator 5 | Guides panel | Guide search, detail screens, checklist, emergency contacts, source metadata, and content governance | `mobile/src/app/(tabs)/guides.tsx`, `mobile/src/app/guide/`, shared guide data |
 
 The prototype is split into feature modules. These workstreams describe outcomes rather than exclusive files: contributors should make the smallest necessary changes across the app, coordinate shared-data changes in advance, and avoid concurrent edits to the same file.
 
-All five tab panels are present and render on Android: Map, Report, Mesh, Help, and Guides. The Offer Help screen is reached from Help and is owned by the Help workstream. The browser prototype remains useful as a reference, but panel work should begin in `mobile/src/app/`.
+All four tab panels are present and render on Android: Map, Mesh, Help, and Guides. The Need help action is on Map and is owned by collaborator 2; the Offer Help screen is reached from Help and is owned by the Help workstream. The browser prototype remains useful as a reference, but panel work should begin in `mobile/src/app/`.
 
 Expo / React Native is the public-app stack. OpenStreetMap is the intended future map-data direction. The Map-panel workstream should document the selected React Native renderer, tile source, attribution, usage limits, and location-privacy approach before replacing the demonstration map.
 
@@ -76,4 +76,4 @@ The browser prototype remains local-only. The Expo mobile app currently uses dem
 
 ## Copyable kickoff message
 
-> We’re building SafeTogether as an Expo / React Native public mobile app plus an authority web dashboard. Please read `README.md`, `docs/collaboration.md`, `docs/implementation-plan.md`, and `docs/mobile-app.md`; run the native mobile app; then claim one of the five app panels—Map, Report, Mesh, Help, or Guides—and its user journey in the team channel before editing. The Offer Help screen belongs to Help. Use your own branch or isolated worktree. Coordinate shared API, connectivity, map, and data-privacy changes before making them. Keep changes focused, preserve existing work, run the listed checks, and send back your branch/diff with changed files and known limitations. OpenStreetMap is our future map direction; do not replace the demonstration map until renderer, attribution, tile source, and location privacy are agreed.
+> We’re building SafeTogether as an Expo / React Native public mobile app plus an authority web dashboard. Please read `README.md`, `docs/collaboration.md`, `docs/implementation-plan.md`, and `docs/mobile-app.md`; run the native mobile app; then claim Map, Need help, Mesh, Help, or Guides and its user journey in the team channel before editing. Need help is a Map action; the Offer Help screen belongs to Help. Use your own branch or isolated worktree. Coordinate shared API, connectivity, map, and data-privacy changes before making them. Keep changes focused, preserve existing work, run the listed checks, and send back your branch/diff with changed files and known limitations. OpenStreetMap is our future map direction; do not replace the demonstration map until renderer, attribution, tile source, and location privacy are agreed.

@@ -1,12 +1,7 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
 import * as Haptics from 'expo-haptics';
-import type { IncidentCategory } from '@/shared/models';
 
 export type Route = 'basement' | 'evacuation' | null;
-export type ReportDraft = { category: IncidentCategory | ''; description: string; location: string };
-export type ReportReceipt = { reference: string; queued: boolean };
-
-const emptyReportDraft: ReportDraft = { category: '', description: '', location: '' };
 
 type AppState = {
   shelling: boolean;
@@ -17,15 +12,10 @@ type AppState = {
   notification: boolean;
   p2pReceived: boolean;
   route: Route;
-  reportDraft: ReportDraft;
-  reportReceipt: ReportReceipt | null;
   setShelling: (v: boolean) => void;
   setSos: (v: boolean) => void;
   setOffline: (v: boolean) => void;
   setRoute: (r: Route) => void;
-  updateReportDraft: (draft: Partial<ReportDraft>) => void;
-  clearReportDraft: () => void;
-  setReportReceipt: (receipt: ReportReceipt | null) => void;
   dismissNotification: () => void;
   reset: () => void;
 };
@@ -42,8 +32,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [notification, setNotification] = useState(false);
   const [p2pReceived, setP2pReceived] = useState(false);
   const [route, setRoute] = useState<Route>(null);
-  const [reportDraft, setReportDraft] = useState<ReportDraft>(emptyReportDraft);
-  const [reportReceipt, setReportReceipt] = useState<ReportReceipt | null>(null);
 
   // Offline demo timeline: packet hops through the mesh, then a P2P offer arrives.
   useEffect(() => {
@@ -67,8 +55,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     notification,
     p2pReceived,
     route,
-    reportDraft,
-    reportReceipt,
     setShelling: (v) => {
       if (v) Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       setShellingRaw(v);
@@ -82,9 +68,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setOffline(v);
     },
     setRoute,
-    updateReportDraft: (draft) => setReportDraft((current) => ({ ...current, ...draft })),
-    clearReportDraft: () => setReportDraft(emptyReportDraft),
-    setReportReceipt,
     dismissNotification: () => setNotification(false),
     reset: () => {
       setShellingRaw(false);
@@ -94,8 +77,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setNotification(false);
       setP2pReceived(false);
       setRoute(null);
-      setReportDraft(emptyReportDraft);
-      setReportReceipt(null);
     },
   };
 

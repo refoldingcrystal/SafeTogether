@@ -24,7 +24,6 @@ export default function TabLayout() {
       }}
     >
       <Tabs.Screen name="index" options={{ title: 'Map', tabBarIcon: tabIcon('map') }} />
-      <Tabs.Screen name="report" options={{ title: 'Report', tabBarIcon: tabIcon('alert-circle') }} />
       <Tabs.Screen
         name="mesh"
         options={{

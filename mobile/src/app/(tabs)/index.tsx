@@ -4,7 +4,7 @@ import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { TacticalMap } from '@/components/TacticalMap';
-import { Button, Card, Pill, SOSButton, StatusBadge } from '@/components/ui';
+import { Button, Card, NeedHelpButton, Pill, StatusBadge } from '@/components/ui';
 import mock from '@/data/mock.json';
 import { categoryIcons, incidentColors, incidentGuide } from '@/icons';
 import { demonstrationIncidents } from '@/shared/demo';
@@ -63,7 +63,7 @@ export default function MapScreen() {
       <View style={styles.bottom} pointerEvents="box-none">
         {!app.sos && (
           <View style={styles.sosRow} pointerEvents="box-none">
-            <SOSButton active={app.sos} onPress={() => app.setSos(true)} />
+            <NeedHelpButton active={app.sos} onPress={() => app.setSos(true)} />
           </View>
         )}
         <BottomCard selectedId={selectedId} onClose={() => setSelectedId(null)} />
@@ -95,14 +95,14 @@ function BottomCard({ selectedId, onClose }: { selectedId: string | null; onClos
 
   if (app.sos) {
     return (
-      <Animated.View entering={FadeInDown} key="sos">
+      <Animated.View entering={FadeInDown} key="need-help">
         <Card style={{ borderWidth: 2, borderColor: colors.red }}>
           <View style={styles.row}>
             <View style={styles.sosBadge}>
-              <Text style={styles.sosBadgeText}>SOS</Text>
+              <Text style={styles.sosBadgeText}>HELP</Text>
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={styles.title}>SOS sent</Text>
+              <Text style={styles.title}>Help request active</Text>
               <Text style={styles.muted}>Your position is visible to 16 people nearby and to responders.</Text>
             </View>
           </View>

@@ -25,13 +25,7 @@
     "plugins": [
       "expo-router",
       "expo-status-bar",
-      "expo-font",
-      [
-        "expo-location",
-        {
-          "locationWhenInUsePermission": "Allow SafeTogether to use your location once to add an approximate location to your report."
-        }
-      ]
+      "expo-font"
     ],
     "experiments": {
       "typedRoutes": true

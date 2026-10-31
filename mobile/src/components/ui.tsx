@@ -58,7 +58,7 @@ export function Card({ children, style }: { children: ReactNode; style?: object 
   return <View style={[styles.card, style]}>{children}</View>;
 }
 
-export function SOSButton({ active, onPress }: { active: boolean; onPress: () => void }) {
+export function NeedHelpButton({ active, onPress }: { active: boolean; onPress: () => void }) {
   const t = useSharedValue(0);
   useEffect(() => {
     t.set(withRepeat(withTiming(1, { duration: active ? 900 : 1600, easing: Easing.out(Easing.quad) }), -1));
@@ -66,12 +66,12 @@ export function SOSButton({ active, onPress }: { active: boolean; onPress: () =>
   const ring = useAnimatedStyle(() => ({ opacity: 0.6 * (1 - t.value), transform: [{ scale: 1 + t.value * 0.7 }] }));
 
   return (
-    <Pressable onPress={onPress} accessibilityRole="button" accessibilityLabel="SOS">
+    <Pressable onPress={onPress} accessibilityRole="button" accessibilityLabel="Need help">
       <View style={styles.sosWrap}>
         <Animated.View style={[styles.sosRing, ring]} />
         <View style={[styles.sos, active && { backgroundColor: colors.redDark }]}>
-          <Text style={styles.sosText}>SOS</Text>
-          {active && <Text style={styles.sosSub}>SENT</Text>}
+          <Text style={styles.sosText}>NEED</Text>
+          <Text style={styles.sosSub}>HELP</Text>
         </View>
       </View>
     </Pressable>
