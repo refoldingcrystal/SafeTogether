@@ -13,6 +13,10 @@ npm start
 
 The authority account is created on first startup when `SAFETOGETHER_AUTHORITY_ID` is set and that ID has not already been provisioned. Keep the same authority ID and `SAFETOGETHER_SECRET` across restarts. Resident registration cannot choose a role. Use HTTPS through a trusted reverse proxy outside local development. Set `CORS_ORIGIN` to the exact client origin in production. Without a stable `SAFETOGETHER_SECRET`, sessions will stop working after a restart.
 
+## Tests
+
+Run `npm test` from `backend/`. The end-to-end suite starts an isolated API server with a temporary data directory and port, then removes its test data when finished.
+
 Base URL: `http://localhost:8787/v1`. Send JSON with `Content-Type: application/json`; authenticated routes require `Authorization: Bearer <token>`. All timestamps are UTC ISO 8601.
 
 ## Connect the mobile app
