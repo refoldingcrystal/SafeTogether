@@ -93,9 +93,35 @@ export default function HelpScreen() {
 
   useFocusEffect(useCallback(() => {
     let active = true;
-    api.getHelpFeed().then((items) => { if (active) setFeedItems(items); }).catch(() => { if (active) setFeedItems(demonstrationHelpFeed()); });
-    return () => { active = false; };
-  }, []));
+    let refreshing = false;
+    let hasLiveFeed = false;
+    let lastFeedResponse: string | null = null;
+    const refreshFeed = async () => {
+      if (!active || app.offline || refreshing) return;
+      refreshing = true;
+      try {
+        const items = await api.getHelpFeed();
+        if (active) {
+          hasLiveFeed = true;
+          const response = JSON.stringify(items);
+          if (response === lastFeedResponse) return;
+          lastFeedResponse = response;
+          setFeedItems(items);
+        }
+      } catch {
+        if (active && !hasLiveFeed) setFeedItems(demonstrationHelpFeed());
+      } finally {
+        refreshing = false;
+      }
+    };
+    if (app.offline || !api.isConfigured) {
+      setFeedItems(demonstrationHelpFeed());
+      return () => { active = false; };
+    }
+    void refreshFeed();
+    const interval = setInterval(() => { void refreshFeed(); }, 4000);
+    return () => { active = false; clearInterval(interval); };
+  }, [app.offline]));
 
   function closeOfferModal() {
     setOfferModalVisible(false);

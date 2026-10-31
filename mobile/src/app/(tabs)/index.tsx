@@ -86,6 +86,10 @@ export default function MapScreen() {
 
   useFocusEffect(useCallback(() => {
     let active = true;
+    let refreshing = false;
+    let fallbackLoaded = false;
+    let lastOfflineSnapshotSavedAt = 0;
+    let lastMapResponse: string | null = null;
     if (app.offline) {
       offlineMapSnapshotStore.load().then((saved) => {
         if (!active) return;
@@ -104,26 +108,43 @@ export default function MapScreen() {
       }).catch(() => undefined);
       return () => { active = false; };
     }
-    api.getMap().then((snapshot: MapSnapshot) => {
-      if (!active) return;
-      applyMapSnapshot(snapshot);
-      void offlineMapSnapshotStore.save(snapshot).then(setMapSnapshotSavedAt).catch(() => undefined);
-    }).catch(async () => {
-      if (!active) return;
-      const saved = await offlineMapSnapshotStore.load();
-      if (!active) return;
-      if (saved) {
-        applyMapSnapshot(saved.snapshot);
-        setMapSnapshotSavedAt(saved.savedAt);
-      } else {
-        setDangerZones(demonstrationDangerZones);
-        setSites(emergencySites);
-        setHelpOffers(demonstrationHelpOffers);
-        setHelpRequests([]);
-        setAllIncidents(demonstrationIncidents);
+    const refreshMap = async () => {
+      if (!active || refreshing) return;
+      refreshing = true;
+      try {
+        const snapshot: MapSnapshot = await api.getMap();
+        if (!active) return;
+        const response = JSON.stringify(snapshot);
+        if (response === lastMapResponse) return;
+        lastMapResponse = response;
+        applyMapSnapshot(snapshot);
+        if (Date.now() - lastOfflineSnapshotSavedAt >= 60_000) {
+          lastOfflineSnapshotSavedAt = Date.now();
+          void offlineMapSnapshotStore.save(snapshot).then((savedAt) => { if (active) setMapSnapshotSavedAt(savedAt); }).catch(() => undefined);
+        }
+      } catch {
+        if (!active || fallbackLoaded) return;
+        fallbackLoaded = true;
+        const saved = await offlineMapSnapshotStore.load();
+        if (!active) return;
+        if (saved) {
+          applyMapSnapshot(saved.snapshot);
+          setMapSnapshotSavedAt(saved.savedAt);
+        } else {
+          setDangerZones(demonstrationDangerZones);
+          setSites(emergencySites);
+          setHelpOffers(demonstrationHelpOffers);
+          setHelpRequests([]);
+          setAllIncidents(demonstrationIncidents);
+        }
+      } finally {
+        refreshing = false;
       }
-    });
-    return () => { active = false; };
+    };
+    void refreshMap();
+    if (!api.isConfigured) return () => { active = false; };
+    const interval = setInterval(() => { void refreshMap(); }, 4000);
+    return () => { active = false; clearInterval(interval); };
   }, [app.offline, app.offlineSource, applyMapSnapshot]));
 
   useEffect(() => {
