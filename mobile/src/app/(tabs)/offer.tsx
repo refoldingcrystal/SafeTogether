@@ -25,7 +25,7 @@ export default function OfferScreen() {
   }
 
   const back = (
-    <Pressable onPress={() => router.navigate('/feed')} style={styles.back}>
+    <Pressable onPress={() => router.back()} style={styles.back}>
       <Ionicons name="chevron-back" size={18} color={colors.blue} />
       <Text style={styles.backText}>Help nearby</Text>
     </Pressable>

@@ -126,6 +126,7 @@ export function TacticalMap({
               <Marker coordinate={zone.coordinate} title={zone.title} description={zone.summary} onPress={() => onSelectDanger?.(zone.id)} zIndex={45}>
                 <View style={[styles.dangerMarker, { backgroundColor: color }]}>
                   <Ionicons name={icon} size={17} color="#fff" />
+                  <Text style={styles.mapMarkerLabel}>{dangerLabels[zone.kind]}</Text>
                 </View>
               </Marker>
             </Fragment>
@@ -152,6 +153,7 @@ export function TacticalMap({
           <Marker key={site.id} coordinate={site.coordinate} title={site.title} description={site.summary} onPress={() => onSelectSite?.(site.id)} zIndex={30}>
             <View style={[styles.emergencySiteMarker, { backgroundColor: siteColors[site.kind] }]}>
               <Ionicons name={siteIcons[site.kind]} size={18} color="#fff" />
+              <Text style={styles.mapMarkerLabel}>{siteLabels[site.kind]}</Text>
             </View>
           </Marker>
         ))}
@@ -161,11 +163,6 @@ export function TacticalMap({
           </Marker>
         )}
 
-        {mock.family.map((person) => (
-          <Marker key={person.id} coordinate={person.coordinate} title={`${person.name} · ${person.status}`} zIndex={15}>
-            <View style={[styles.familyMarker, { backgroundColor: person.color }]}><Text style={styles.familyInitials}>{person.initials}</Text></View>
-          </Marker>
-        ))}
         {showBasement && (
           <Marker coordinate={mock.basement.coordinate} title="Safe basement" description={`${mock.basement.author} · ${mock.basement.street}`} zIndex={22}>
             <View style={styles.basementMarker}><Ionicons name="home" size={18} color="#fff" /></View>
@@ -198,8 +195,6 @@ const styles = StyleSheet.create({
   incidentMarkerSelected: { transform: [{ scale: 1.2 }], borderColor: '#101828' },
   alertMarker: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: colors.red, borderRadius: 7, paddingHorizontal: 8, paddingVertical: 5, ...shadow },
   alertMarkerText: { color: '#fff', fontSize: 10, fontWeight: '900', letterSpacing: 0.7 },
-  familyMarker: { width: 34, height: 34, borderRadius: 17, borderWidth: 3, borderColor: '#fff', alignItems: 'center', justifyContent: 'center', ...shadow },
-  familyInitials: { color: '#fff', fontWeight: '900', fontSize: 14 },
   basementMarker: { width: 36, height: 36, borderRadius: 18, borderWidth: 3, borderColor: '#fff', backgroundColor: colors.orange, alignItems: 'center', justifyContent: 'center', ...shadow },
   nearbyDot: { width: 10, height: 10, borderRadius: 5, borderWidth: 2, borderColor: '#fff', backgroundColor: colors.textMuted },
   authorityMarker: { borderRadius: 7, borderWidth: 2, borderColor: '#fff', paddingHorizontal: 7, paddingVertical: 4, ...shadow },
@@ -208,15 +203,18 @@ const styles = StyleSheet.create({
   meMarkerSos: { backgroundColor: colors.red, transform: [{ scale: 1.15 }] },
   attribution: { position: 'absolute', right: 5, bottom: 5, backgroundColor: 'rgba(255,255,255,0.86)', borderRadius: 3, paddingHorizontal: 4, paddingVertical: 2 },
   attributionText: { fontSize: 8, color: colors.textMuted },
-  dangerMarker: { width: 38, height: 38, borderRadius: 19, borderWidth: 3, borderColor: '#fff', alignItems: 'center', justifyContent: 'center', ...shadow },
-  emergencySiteMarker: { width: 38, height: 38, borderRadius: 11, borderWidth: 3, borderColor: '#fff', alignItems: 'center', justifyContent: 'center', ...shadow },
+  dangerMarker: { minWidth: 70, height: 36, borderRadius: 18, borderWidth: 3, borderColor: '#fff', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, paddingHorizontal: 7, ...shadow },
+  emergencySiteMarker: { minWidth: 72, height: 36, borderRadius: 10, borderWidth: 3, borderColor: '#fff', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, paddingHorizontal: 7, ...shadow },
   destinationMarker: { width: 38, height: 38, borderRadius: 19, borderWidth: 3, borderColor: '#fff', backgroundColor: colors.text, alignItems: 'center', justifyContent: 'center', ...shadow },
+  mapMarkerLabel: { color: '#fff', fontSize: 9, fontWeight: '900', letterSpacing: 0.3 },
 });
 
 const dangerColors = { attack: colors.red, fire: '#F04438', flooding: colors.violet } as const;
 const dangerIcons = { attack: 'warning', fire: 'flame', flooding: 'water' } as const;
+const dangerLabels = { attack: 'ATAK', fire: 'POŻAR', flooding: 'ZALANIE' } as const;
 const siteColors = { shelter: colors.green, safe_zone: colors.blue, aid: colors.orange } as const;
 const siteIcons = { shelter: 'bed', safe_zone: 'shield-checkmark', aid: 'medkit' } as const;
+const siteLabels = { shelter: 'SCHRON', safe_zone: 'SAFE', aid: 'POMOC' } as const;
 
 function heatColor(color: string, factor: number) {
   const alpha = factor === 1 ? 0.12 : factor === 0.7 ? 0.14 : 0.2;
