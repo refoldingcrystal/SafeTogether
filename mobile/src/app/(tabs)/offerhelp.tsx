@@ -281,7 +281,7 @@ function OfferHelpModal({
               })}
             </View>
 
-            <Text style={styles.mapLocationHint}>We’ll use your current location, shifted randomly by up to 500 m.</Text>
+            <Text style={styles.mapLocationHint}>Your current location is used automatically.</Text>
 
             <View style={styles.fieldGroup}>
               <Text style={styles.sectionLabel}>DESCRIPTION <Text style={styles.optional}>(OPTIONAL)</Text></Text>
