@@ -165,7 +165,7 @@ export function TacticalMap(props: TacticalMapProps) {
         ))}
         {(props.helpRequests ?? []).map((request) => (
           groupedKeys.has(`request:${request.id}`) ? null :
-          <Marker key={request.id} position={ll(request.coordinate)} icon={icon('<div class="m-help-request">? <div class="m-label">HELP NEEDED</div></div>', [38, 38])} eventHandlers={{ click: () => props.onSelectHelpRequest?.(request.id) }} />
+          <Marker key={request.id} position={ll(request.coordinate)} icon={icon('<div class="m-help-request"><svg viewBox="0 0 24 24"><path d="M12 22c-1.1 0-2-.9-2-2v-5.2l-1.3 1.3a1 1 0 0 1-1.4 0l-.7-.7a1 1 0 0 1 0-1.4l4.1-4.1V4a1.5 1.5 0 0 1 3 0v5.4l1.2-1.2a1.5 1.5 0 0 1 2.5 1.1V15a7 7 0 0 1-5.4 6.8z" fill="currentColor"/></svg><div class="m-label">HELP NEEDED</div></div>', [38, 38])} eventHandlers={{ click: () => props.onSelectHelpRequest?.(request.id) }} />
         ))}
         {placeGroups.map((group) => (
           <Marker key={group.key} position={ll(group.coordinate)} zIndexOffset={2000} icon={icon(`<div class="m-cluster">${group.items.length}</div>`, [42, 42])} eventHandlers={{ click: () => setPlaceChoices(group.items) }} />

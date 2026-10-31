@@ -220,6 +220,10 @@
   font-weight: 900;
   box-shadow: 0 2px 10px rgba(16, 24, 40, 0.35);
 }
+.m-help-request svg {
+  width: 21px;
+  height: 21px;
+}
 
 .m-cluster {
   width: 42px;
