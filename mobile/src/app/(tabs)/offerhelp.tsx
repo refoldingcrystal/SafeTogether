@@ -161,11 +161,13 @@ export default function HelpScreen() {
     setOfferModalVisible(true);
   }
 
-  function stopOffering(offerId: string) {
-    Alert.alert('Stop offering?', 'This offer will be removed from your Help feed.', [
-      { text: 'Keep offering', style: 'cancel' },
-      { text: 'Stop offering', style: 'destructive', onPress: () => { void api.stopOffering(offerId).then(async () => setFeedItems(await api.getHelpFeed())).catch((error) => Alert.alert('Could not stop offering', error instanceof Error ? error.message : 'Please try again.')); } },
-    ]);
+  async function stopOffering(offerId: string) {
+    try {
+      await api.stopOffering(offerId);
+      setFeedItems(await api.getHelpFeed());
+    } catch (error) {
+      Alert.alert('Could not stop offering', error instanceof Error ? error.message : 'Please try again.');
+    }
   }
 
   function openChat(item: HelpFeedItem) {
