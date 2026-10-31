@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -124,7 +124,7 @@ export default function MapScreen() {
       {helpMenuOpen && (
         <View style={styles.sheetBackdrop}>
           <Animated.View entering={FadeInUp} style={styles.sheet}>
-            <Card>
+            <ScrollView contentContainerStyle={styles.sheetContent} showsVerticalScrollIndicator>
               <View style={styles.sheetHeader}>
                 <View style={{ flex: 1 }}>
                   <Text style={styles.title}>What kind of help do you need?</Text>
@@ -174,7 +174,7 @@ export default function MapScreen() {
               <TextInput value={details} onChangeText={setDetails} placeholder="What happened or what do you need?" placeholderTextColor={colors.textDim} style={[styles.input, styles.detailsInput]} multiline maxLength={400} textAlignVertical="top" accessibilityLabel="Additional details" />
               <Text style={styles.disclaimer}>This demonstration does not contact emergency services or send your request to other people.</Text>
               <Button icon="send" label="Continue with help request" disabled={!helpKind} onPress={submitHelpRequest} />
-            </Card>
+            </ScrollView>
           </Animated.View>
         </View>
       )}
@@ -329,8 +329,9 @@ const styles = StyleSheet.create({
   alertText: { color: '#fff', fontSize: 12, marginTop: 2 },
   bottom: { position: 'absolute', left: 0, right: 0, bottom: 0, padding: 12 },
   sosRow: { alignItems: 'center', marginBottom: 4 },
-  sheetBackdrop: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, justifyContent: 'flex-end', backgroundColor: '#10182888', padding: 12 },
-  sheet: { maxHeight: '88%' },
+  sheetBackdrop: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, backgroundColor: colors.bg },
+  sheet: { flex: 1, backgroundColor: colors.bg },
+  sheetContent: { padding: 20, paddingBottom: 40, gap: 12 },
   sheetHeader: { flexDirection: 'row', gap: 12, alignItems: 'flex-start' },
   helpOption: { flexDirection: 'row', alignItems: 'center', gap: 12, borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, padding: 12 },
   helpOptionSelected: { borderColor: colors.blue, backgroundColor: colors.blueSoft },
