@@ -52,15 +52,6 @@
 
   "helpFeed": [
     {
-      "id": "water",
-      "type": "offer",
-      "icon": "water",
-      "title": "Drinking water distribution point",
-      "author": "Red Cross · official",
-      "distance": "400 m",
-      "tags": ["Water", "Until 23:00"]
-    },
-    {
       "id": "doctor",
       "type": "request",
       "icon": "medkit",
@@ -68,15 +59,6 @@
       "author": "John W.",
       "distance": "700 m",
       "tags": ["Urgent", "Bleeding"]
-    },
-    {
-      "id": "bus",
-      "type": "offer",
-      "icon": "bus",
-      "title": "6 free seats on an evacuation bus",
-      "author": "Ocalenie Foundation",
-      "distance": "1.2 km",
-      "tags": ["Leaves 23:30", "Zbawiciela Sq."]
     },
     {
       "id": "power",

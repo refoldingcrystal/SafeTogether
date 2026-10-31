@@ -1,0 +1,245 @@
+import { createServer } from 'node:http';
+import { randomUUID, randomBytes, scryptSync, timingSafeEqual, createHmac } from 'node:crypto';
+import { mkdir, readFile, writeFile, rename } from 'node:fs/promises';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const DATA_DIR = process.env.SAFETOGETHER_DATA_DIR || path.join(ROOT, 'data');
+const DB_FILE = path.join(DATA_DIR, 'store.json');
+const UPLOAD_DIR = path.join(DATA_DIR, 'uploads');
+const PORT = Number(process.env.PORT || 8787);
+const SECRET = process.env.SAFETOGETHER_SECRET || randomBytes(32).toString('hex');
+const MAX_BODY = 7 * 1024 * 1024;
+const emptyDb = () => ({ users: [], sessions: [], incidents: [], offers: [], notices: [], rendezvousPoints: [], connections: [], locations: [], audit: [] });
+let db = emptyDb();
+let writes = Promise.resolve();
+
+async function persist() {
+  const snapshot = JSON.stringify(db, null, 2);
+  writes = writes.then(async () => {
+    const temp = `${DB_FILE}.${process.pid}.tmp`;
+    await writeFile(temp, snapshot, { mode: 0o600 });
+    await rename(temp, DB_FILE);
+  });
+  return writes;
+}
+
+async function init() {
+  await mkdir(UPLOAD_DIR, { recursive: true });
+  try { db = { ...emptyDb(), ...JSON.parse(await readFile(DB_FILE, 'utf8')) }; }
+  catch (error) { if (error.code !== 'ENOENT') throw error; await persist(); }
+  const authorityEmail = process.env.SAFETOGETHER_AUTHORITY_EMAIL?.trim().toLowerCase();
+  const authorityPassword = process.env.SAFETOGETHER_AUTHORITY_PASSWORD;
+  if (authorityEmail && authorityPassword && !db.users.some((u) => u.email === authorityEmail)) {
+    const salt = randomBytes(16).toString('hex');
+    db.users.push({ id: id('usr'), email: authorityEmail, name: 'Authority operator', role: 'authority', salt, passwordHash: scryptSync(authorityPassword, salt, 64).toString('hex'), createdAt: now() });
+    await persist();
+  }
+}
+
+const now = () => new Date().toISOString();
+const id = (prefix) => `${prefix}_${randomUUID()}`;
+const clean = (v, max = 500) => typeof v === 'string' ? v.trim().slice(0, max) : '';
+const fail = (status, message) => Object.assign(new Error(message), { status });
+const publicUser = ({ id: userId, name, role, createdAt }) => ({ id: userId, name, role, createdAt });
+const audit = (actorId, action, targetType, targetId, details = {}) => db.audit.unshift({ id: id('aud'), actorId, action, targetType, targetId, details, createdAt: now() });
+
+function tokenFor(userId) {
+  const payload = Buffer.from(JSON.stringify({ sub: userId, exp: Date.now() + 7 * 86400000 })).toString('base64url');
+  return `${payload}.${createHmac('sha256', SECRET).update(payload).digest('base64url')}`;
+}
+function auth(req, roles) {
+  const token = req.headers.authorization?.replace(/^Bearer\s+/i, '');
+  if (!token) throw fail(401, 'Sign-in required');
+  const [payload, signature] = token.split('.');
+  if (!payload || !signature) throw fail(401, 'Invalid session');
+  const expected = createHmac('sha256', SECRET).update(payload).digest();
+  let supplied;
+  try { supplied = Buffer.from(signature, 'base64url'); } catch { throw fail(401, 'Invalid session'); }
+  if (supplied.length !== expected.length || !timingSafeEqual(supplied, expected)) throw fail(401, 'Invalid session');
+  let claims;
+  try { claims = JSON.parse(Buffer.from(payload, 'base64url').toString()); } catch { throw fail(401, 'Invalid session'); }
+  if (claims.exp < Date.now()) throw fail(401, 'Session expired');
+  const user = db.users.find((u) => u.id === claims.sub);
+  if (!user) throw fail(401, 'Unknown account');
+  if (roles && !roles.includes(user.role)) throw fail(403, 'Insufficient role');
+  return user;
+}
+function privateUser(userId) { return db.users.find((u) => u.id === userId); }
+function getLocation(user, viewer) {
+  const record = db.locations.find((x) => x.userId === user.id);
+  if (!record) return null;
+  const connected = db.connections.some((c) => c.status === 'accepted' && ((c.fromUserId === viewer?.id && c.toUserId === user.id) || (c.toUserId === viewer?.id && c.fromUserId === user.id)));
+  const canSee = user.id === viewer?.id || record.visibility === 'everyone' || (record.visibility === 'connections' && connected) || (record.visibility === 'connections_authorities' && (connected || viewer?.role === 'authority'));
+  if (!canSee) return null;
+  return { userId: user.id, location: record.location, precision: record.precision, updatedAt: record.updatedAt };
+}
+
+async function readBody(req) {
+  const chunks = []; let size = 0;
+  for await (const chunk of req) { size += chunk.length; if (size > MAX_BODY) throw fail(413, 'Request body too large'); chunks.push(chunk); }
+  try { return chunks.length ? JSON.parse(Buffer.concat(chunks).toString('utf8')) : {}; }
+  catch { throw fail(400, 'Body must be valid JSON'); }
+}
+function send(res, status, body) {
+  res.writeHead(status, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', 'access-control-allow-origin': process.env.CORS_ORIGIN || '*', 'access-control-allow-headers': 'content-type, authorization', 'access-control-allow-methods': 'GET,POST,PATCH,DELETE,OPTIONS' });
+  res.end(status === 204 ? undefined : JSON.stringify(body));
+}
+function approximate(location) {
+  if (!location || typeof location !== 'object') throw fail(400, 'Approximate location is required');
+  const label = clean(location.label, 120); const precision = ['neighborhood', 'district', 'landmark'].includes(location.precision) ? location.precision : 'neighborhood';
+  const result = { label, precision };
+  if (!label) throw fail(400, 'Location label is required');
+  if (Number.isFinite(location.latitude) && Number.isFinite(location.longitude) && Math.abs(location.latitude) <= 90 && Math.abs(location.longitude) <= 180) {
+    // Reduce precision before persistence and public delivery.
+    result.latitude = Number(location.latitude.toFixed(2)); result.longitude = Number(location.longitude.toFixed(2));
+  }
+  return result;
+}
+
+async function route(req, res) {
+  const url = new URL(req.url, 'http://localhost');
+  const parts = url.pathname.split('/').filter(Boolean).map(decodeURIComponent);
+  const method = req.method;
+  if (method === 'OPTIONS') return send(res, 204, {});
+  if (parts[0] !== 'v1') throw fail(404, 'Route not found');
+  const resource = parts[1]; const recordId = parts[2];
+  if (method === 'GET' && resource === 'health') return send(res, 200, { status: 'ok', time: now() });
+
+  if (resource === 'auth' && method === 'POST' && parts[2] === 'register') {
+    const body = await readBody(req); const email = clean(body.email, 254).toLowerCase(); const name = clean(body.name, 80); const password = typeof body.password === 'string' ? body.password : '';
+    if (!/^\S+@\S+\.\S+$/.test(email) || password.length < 10 || !name) throw fail(400, 'Name, valid email, and password (at least 10 characters) are required');
+    if (db.users.some((u) => u.email === email)) throw fail(409, 'Email is already registered');
+    const salt = randomBytes(16).toString('hex'); const user = { id: id('usr'), email, name, role: 'resident', salt, passwordHash: scryptSync(password, salt, 64).toString('hex'), createdAt: now() };
+    db.users.push(user); await persist(); return send(res, 201, { token: tokenFor(user.id), user: publicUser(user) });
+  }
+  if (resource === 'auth' && method === 'POST' && parts[2] === 'login') {
+    const body = await readBody(req); const user = db.users.find((u) => u.email === clean(body.email, 254).toLowerCase());
+    if (!user || typeof body.password !== 'string' || !timingSafeEqual(scryptSync(body.password, user.salt, 64), Buffer.from(user.passwordHash, 'hex'))) throw fail(401, 'Email or password is incorrect');
+    return send(res, 200, { token: tokenFor(user.id), user: publicUser(user) });
+  }
+
+  const user = auth(req);
+  if (resource === 'auth' && method === 'GET' && parts[2] === 'me') return send(res, 200, { user: publicUser(user) });
+
+  if (resource === 'incidents' && method === 'GET') {
+    const rows = db.incidents.filter((x) => x.status !== 'rejected' && (!url.searchParams.get('status') || x.status === url.searchParams.get('status'))).map(({ attachments, exactLocation, reporterId, shareWithAuthorities, ...x }) => ({ ...x, attachments: x.status === 'verified' ? attachments.filter((a) => a.approved).map(({ id: attachmentId, mimeType }) => ({ id: attachmentId, mimeType })) : [] }));
+    return send(res, 200, { data: rows });
+  }
+  if (resource === 'incidents' && method === 'POST' && !recordId) {
+    const body = await readBody(req); const category = clean(body.category, 60); const description = clean(body.description, 1000);
+    if (!category || description.length < 5) throw fail(400, 'Category and description (at least 5 characters) are required');
+    const row = { id: id('inc'), category, description, approximateLocation: approximate(body.approximateLocation), submittedAt: now(), updatedAt: now(), source: 'community', verificationStatus: 'awaiting_review', status: 'new', reporterId: user.id, attachments: [], shareWithAuthorities: body.shareWithAuthorities !== false };
+    db.incidents.unshift(row); audit(user.id, 'incident_submitted', 'incident', row.id); await persist();
+    return send(res, 201, { data: { id: row.id, category, description, approximateLocation: row.approximateLocation, submittedAt: row.submittedAt, status: row.status, verificationStatus: row.verificationStatus } });
+  }
+  if (resource === 'incidents' && method === 'POST' && recordId && parts[3] === 'attachments') {
+    const incident = db.incidents.find((x) => x.id === recordId);
+    if (!incident) throw fail(404, 'Incident not found');
+    if (incident.reporterId !== user.id && user.role !== 'authority') throw fail(403, 'Only the reporter or an authority can attach photos');
+    const body = await readBody(req); const match = typeof body.data === 'string' && body.data.match(/^data:(image\/(?:jpeg|png|webp));base64,([A-Za-z0-9+/=]+)$/);
+    if (!match) throw fail(400, 'Image must be a base64 JPEG, PNG, or WebP data URL');
+    const bytes = Buffer.from(match[2], 'base64'); if (!bytes.length || bytes.length > 5 * 1024 * 1024) throw fail(413, 'Photo limit is 5 MB');
+    const signatures = { 'image/jpeg': bytes[0] === 0xff && bytes[1] === 0xd8, 'image/png': bytes.subarray(0, 8).equals(Buffer.from([137,80,78,71,13,10,26,10])), 'image/webp': bytes.subarray(0, 4).toString() === 'RIFF' && bytes.subarray(8, 12).toString() === 'WEBP' };
+    if (!signatures[match[1]]) throw fail(400, 'Image content does not match its declared format');
+    const attachment = { id: id('img'), mimeType: match[1], size: bytes.length, uploadedAt: now(), approved: false };
+    await writeFile(path.join(UPLOAD_DIR, attachment.id), bytes, { flag: 'wx', mode: 0o600 }); incident.attachments.push(attachment); incident.updatedAt = now(); await persist();
+    return send(res, 201, { data: { id: attachment.id, moderation: 'pending' } });
+  }
+  if (resource === 'incidents' && method === 'PATCH' && recordId && user.role === 'authority') {
+    const row = db.incidents.find((x) => x.id === recordId); if (!row) throw fail(404, 'Incident not found');
+    const body = await readBody(req);
+    if (['new','under_review','verified','assigned','in_progress','resolved','rejected'].includes(body.status)) { row.status = body.status; row.verificationStatus = body.status === 'verified' ? 'verified' : body.status === 'rejected' ? 'rejected' : row.verificationStatus; }
+    if (Array.isArray(body.approvedAttachmentIds)) for (const a of row.attachments) a.approved = body.approvedAttachmentIds.includes(a.id);
+    row.updatedAt = now(); audit(user.id, 'incident_updated', 'incident', row.id, { status: row.status }); await persist(); return send(res, 200, { data: row });
+  }
+
+  if (resource === 'offers' && method === 'GET') return send(res, 200, { data: db.offers.filter((o) => o.status === 'active').map(({ ownerId, ...o }) => o) });
+  if (resource === 'offers' && method === 'POST') {
+    const body = await readBody(req); const description = clean(body.description, 1000);
+    if (!clean(body.category, 60) || description.length < 5) throw fail(400, 'Category and description (at least 5 characters) are required');
+    const row = { id: id('off'), category: clean(body.category, 60), description, approximateLocation: approximate(body.approximateLocation), availability: clean(body.availability, 100), capacity: clean(body.capacity, 100), status: 'active', createdAt: now(), ownerId: user.id };
+    db.offers.unshift(row); audit(user.id, 'offer_created', 'help_offer', row.id); await persist(); const { ownerId, ...safe } = row; return send(res, 201, { data: safe });
+  }
+  if (resource === 'offers' && method === 'PATCH' && recordId) {
+    const row = db.offers.find((o) => o.id === recordId); if (!row) throw fail(404, 'Offer not found');
+    if (row.ownerId !== user.id && user.role !== 'authority') throw fail(403, 'Only the offer owner can manage it');
+    const body = await readBody(req); if (['active','withdrawn','expired'].includes(body.status)) row.status = body.status; await persist(); return send(res, 200, { data: row });
+  }
+
+  if (resource === 'notices' && method === 'GET') return send(res, 200, { data: db.notices.filter((n) => n.status === 'published' && (!n.expiresAt || n.expiresAt > now())) });
+  if (resource === 'notices' && method === 'POST' && user.role === 'authority') {
+    const body = await readBody(req); if (!clean(body.title, 120) || !clean(body.body, 2000)) throw fail(400, 'Title and body are required');
+    const row = { id: id('not'), title: clean(body.title, 120), body: clean(body.body, 2000), status: body.status === 'published' ? 'published' : 'draft', createdAt: now(), publishedAt: body.status === 'published' ? now() : null, expiresAt: body.expiresAt || null, authorId: user.id };
+    db.notices.unshift(row); audit(user.id, row.status === 'published' ? 'notice_published' : 'notice_drafted', 'notice', row.id); await persist(); return send(res, 201, { data: row });
+  }
+  if (resource === 'notices' && method === 'PATCH' && recordId && user.role === 'authority') {
+    const row = db.notices.find((n) => n.id === recordId); if (!row) throw fail(404, 'Notice not found'); const body = await readBody(req);
+    if (['draft','published','withdrawn','expired'].includes(body.status)) row.status = body.status;
+    if (row.status === 'published' && !row.publishedAt) row.publishedAt = now(); if (body.title) row.title = clean(body.title, 120); if (body.body) row.body = clean(body.body, 2000);
+    audit(user.id, `notice_${row.status}`, 'notice', row.id); await persist(); return send(res, 200, { data: row });
+  }
+
+  if (resource === 'rendezvous' && method === 'GET') return send(res, 200, { data: db.rendezvousPoints.filter((p) => p.status === 'active') });
+  if (resource === 'rendezvous' && method === 'POST' && user.role === 'authority') {
+    const body = await readBody(req); const row = { id: id('rv'), title: clean(body.title, 120), instructions: clean(body.instructions, 1000), location: approximate(body.location), status: 'active', createdAt: now(), authorId: user.id, expiresAt: body.expiresAt || null };
+    if (!row.title) throw fail(400, 'Rendezvous point title is required'); db.rendezvousPoints.unshift(row); audit(user.id, 'rendezvous_published', 'rendezvous', row.id); await persist(); return send(res, 201, { data: row });
+  }
+  if (resource === 'rendezvous' && method === 'PATCH' && recordId && user.role === 'authority') {
+    const row = db.rendezvousPoints.find((p) => p.id === recordId); if (!row) throw fail(404, 'Rendezvous point not found'); const body = await readBody(req); if (['active','withdrawn','completed'].includes(body.status)) row.status = body.status; await persist(); return send(res, 200, { data: row });
+  }
+
+  if (resource === 'location' && method === 'PUT') {
+    const body = await readBody(req); const visibility = ['connections','connections_authorities','everyone','private'].includes(body.visibility) ? body.visibility : 'connections';
+    const record = { userId: user.id, location: approximate(body.location), precision: body.precision === 'district' ? 'district' : 'neighborhood', visibility, updatedAt: now() };
+    db.locations = db.locations.filter((x) => x.userId !== user.id); db.locations.push(record); await persist(); return send(res, 200, { data: { visibility, updatedAt: record.updatedAt } });
+  }
+  if (resource === 'location' && method === 'DELETE') { db.locations = db.locations.filter((x) => x.userId !== user.id); await persist(); return send(res, 204, {}); }
+  if (resource === 'locations' && method === 'GET') {
+    const people = db.locations.map((x) => privateUser(x.userId)).filter(Boolean).map((person) => getLocation(person, user)).filter(Boolean);
+    return send(res, 200, { data: people });
+  }
+  if (resource === 'connections' && method === 'GET') {
+    const data = db.connections.filter((c) => c.fromUserId === user.id || c.toUserId === user.id).map((c) => ({ id: c.id, status: c.status, user: publicUser(privateUser(c.fromUserId === user.id ? c.toUserId : c.fromUserId)) })); return send(res, 200, { data });
+  }
+  if (resource === 'connections' && method === 'POST') {
+    const body = await readBody(req); const target = db.users.find((u) => u.email === clean(body.email, 254).toLowerCase());
+    if (!target || target.id === user.id) throw fail(404, 'Account not found');
+    if (db.connections.some((c) => [c.fromUserId,c.toUserId].includes(user.id) && [c.fromUserId,c.toUserId].includes(target.id))) throw fail(409, 'Connection already exists');
+    const row = { id: id('con'), fromUserId: user.id, toUserId: target.id, status: 'pending', createdAt: now() }; db.connections.push(row); await persist(); return send(res, 201, { data: { id: row.id, status: row.status } });
+  }
+  if (resource === 'connections' && method === 'PATCH' && recordId) {
+    const row = db.connections.find((c) => c.id === recordId); if (!row || row.toUserId !== user.id) throw fail(404, 'Connection request not found');
+    const body = await readBody(req); if (body.status === 'accepted' || body.status === 'rejected') row.status = body.status; await persist(); return send(res, 200, { data: { id: row.id, status: row.status } });
+  }
+
+  if (resource === 'heatmap' && method === 'GET') {
+    const counts = new Map();
+    for (const incident of db.incidents.filter((x) => ['verified','in_progress','assigned'].includes(x.status))) {
+      const location = incident.approximateLocation; const key = location.label.toLowerCase(); const cell = counts.get(key) || { label: location.label, latitude: location.latitude, longitude: location.longitude, count: 0, categories: {} };
+      cell.count += 1; cell.categories[incident.category] = (cell.categories[incident.category] || 0) + 1; counts.set(key, cell);
+    }
+    return send(res, 200, { data: [...counts.values()] });
+  }
+  if (resource === 'attachments' && method === 'GET' && recordId) {
+    const incident = db.incidents.find((x) => x.attachments.some((a) => a.id === recordId));
+    const attachment = incident?.attachments.find((a) => a.id === recordId);
+    if (!incident || !attachment || (!attachment.approved && !(user.role === 'authority')) || (attachment.approved && incident.status !== 'verified')) throw fail(404, 'Attachment not found');
+    const bytes = await readFile(path.join(UPLOAD_DIR, attachment.id));
+    res.writeHead(200, { 'content-type': attachment.mimeType, 'content-length': bytes.length, 'cache-control': 'private, no-store', 'x-content-type-options': 'nosniff', 'access-control-allow-origin': process.env.CORS_ORIGIN || '*' }); res.end(bytes); return;
+  }
+  if (resource === 'authority' && method === 'GET' && parts[2] === 'incidents') {
+    auth(req, ['authority']); return send(res, 200, { data: db.incidents });
+  }
+  if (resource === 'authority' && method === 'GET' && parts[2] === 'audit') {
+    auth(req, ['authority']); return send(res, 200, { data: db.audit });
+  }
+  throw fail(404, 'Route not found');
+}
+
+await init();
+createServer(async (req, res) => {
+  try { await route(req, res); }
+  catch (error) { send(res, error.status || 500, { error: error.status ? error.message : 'Internal server error' }); if (!error.status) console.error(error); }
+}).listen(PORT, '0.0.0.0', () => console.log(`SafeTogether API listening on http://localhost:${PORT}`));

@@ -5,7 +5,7 @@
 The public SafeTogether experience will be a React Native application built with Expo and released for iOS and Android. It covers the resident-facing journeys:
 
 - Nearby incidents and official notices on a map.
-- Emergency reporting.
+- A map-based Need help action.
 - Community help offers.
 - Information and safety guides.
 - Preparedness checklist and accessibility preferences.
@@ -17,14 +17,13 @@ The authorities dashboard remains a web experience. Both clients will use the sa
 ```text
 mobile/
 ├── app/                    # Expo Router screens and navigation
-│   ├── (tabs)/              # Map, Report, Offer Help, Guides
+│   ├── (tabs)/              # Map, Mesh, Help, Guides
 │   ├── guide/               # Individual safety-guide screens
 │   ├── incident/            # Public incident details
 │   └── settings/            # Privacy, location, notifications, accessibility
 ├── components/              # Buttons, fields, badges, cards, loading states
 ├── features/                # Feature-specific presentation and logic
 │   ├── incidents/
-│   ├── reports/
 │   ├── help-offers/
 │   ├── guides/
 │   └── settings/
@@ -41,11 +40,11 @@ The current browser prototype under `src/` is not the mobile app source. Use it 
 Use a four-tab public navigation model:
 
 1. Map
-2. Report
-3. Offer Help
+2. Mesh
+3. Help (neighbour feed and the Offer Help flow)
 4. Guides
 
-Settings should be reached from the map header or a profile area so it does not displace emergency actions from the primary navigation.
+The Need help action belongs on the map rather than as a separate tab. Settings should be reached from the map header or a profile area so it does not displace primary actions from the navigation.
 
 ## Maps and location
 
@@ -63,8 +62,7 @@ The public map must show approximate locations only. Exact locations, internal n
 
 | Capability | Intended use | Rule before enabling |
 |---|---|---|
-| Location | Center the map and confirm an approximate report location | Ask only after a user action; never imply location is live when it is cached or unavailable |
-| Camera / photo library | Optional report attachment | Validate uploads, state consent clearly, and provide a safe moderation path |
+| Location | Center the map and support a user-initiated Need help action | Ask only after a user action; never imply location is live when it is cached or unavailable |
 | Notifications | Opt-in official notices | Target by approved region, support unsubscribe, and distinguish official notices from community reports |
 | Local storage | Checklist, cached guides, sync time, queued actions | Do not store sensitive private data without an approved security design |
 
@@ -75,10 +73,10 @@ The mobile app should cache safety guides and the last synchronized public map d
 - Live information.
 - Last synchronization time.
 - Cached or outdated information.
-- Queued report or help-offer actions.
+- Queued help-offer actions.
 - Actions unavailable while offline.
 
-Do not label cached content as live. A queued report must make clear that it has not been received by authorities yet.
+Do not label cached content as live. A queued action must make clear that it has not been received by another person or authorities yet.
 
 ## Shared API boundary
 
@@ -88,10 +86,12 @@ The mobile app now defines its initial typed contract in `mobile/src/shared/mode
 
 The first Expo milestone should be demonstrable on a physical phone and include:
 
-1. Four-tab native navigation.
+1. Four-tab native navigation: Map, Mesh, Help, and Guides.
 2. Mobile map placeholder with explicit demonstration status.
-3. Native report form with validation and local draft preservation.
-4. Guides list, search, guide details, and checklist persistence.
-5. A shared mock API layer that mirrors the agreed backend contract.
+3. Map-based Need help action with clear demonstration status and cancellation.
+4. Mesh status screen with clear demonstration and offline/queued states.
+5. Help feed and offer-help flow with clear demonstration status.
+6. Guides list, search, guide details, and checklist persistence.
+7. A shared mock API layer that mirrors the agreed backend contract.
 
 After that milestone, add backend synchronization, OpenStreetMap rendering, location permission, authenticated offer management, and official-notice notifications.
