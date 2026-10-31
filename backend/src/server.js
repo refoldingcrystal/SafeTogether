@@ -31,7 +31,7 @@ async function init() {
   catch (error) { if (error.code !== 'ENOENT') throw error; await persist(); }
   const authorityLoginId = clean(process.env.SAFETOGETHER_AUTHORITY_ID, 100);
   if (authorityLoginId && !findByLoginId(authorityLoginId)) {
-    const user = { id: id('usr'), name: 'Authority operator', role: 'authority', loginIdHash: loginIdDigest(authorityLoginId), createdAt: now() };
+    const user = { id: id('usr'), name: authorityLoginId, role: 'authority', loginId: authorityLoginId, createdAt: now() };
     db.users.push(user);
     await persist();
   }
@@ -53,7 +53,10 @@ const audit = (actorId, action, targetType, targetId, details = {}) => db.audit.
 const loginIdDigest = (value) => createHmac('sha256', SECRET).update(value).digest('hex');
 function findByLoginId(value) {
   if (typeof value !== 'string' || !value.trim()) return null;
-  const supplied = Buffer.from(loginIdDigest(value.trim()), 'hex');
+  const loginId = value.trim();
+  const directMatch = db.users.find((user) => user.loginId === loginId);
+  if (directMatch) return directMatch;
+  const supplied = Buffer.from(loginIdDigest(loginId), 'hex');
   return db.users.find((user) => {
     if (!user.loginIdHash) return false;
     const stored = Buffer.from(user.loginIdHash, 'hex');
@@ -191,8 +194,14 @@ async function route(req, res) {
     let user = findByLoginId(loginId);
     const created = !user;
     if (!user) {
-      user = { id: id('usr'), name: 'Community member', role: 'resident', loginIdHash: loginIdDigest(loginId), createdAt: now() };
+      user = { id: id('usr'), name: loginId, role: 'resident', loginId, createdAt: now() };
       db.users.push(user); await persist();
+    } else if (user.loginId !== loginId) {
+      // Migrate IDs created by the prior hash-only storage implementation.
+      user.loginId = loginId;
+      user.name = loginId;
+      delete user.loginIdHash;
+      await persist();
     }
     return send(res, 200, { token: tokenFor(user.id), user: publicUser(user), created });
   }
