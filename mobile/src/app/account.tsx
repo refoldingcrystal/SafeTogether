@@ -5,10 +5,7 @@ import { api, type ApiUser } from '@/services/api';
 import { colors, radius } from '@/theme';
 
 export default function AccountScreen() {
-  const [mode, setMode] = useState<'login' | 'register'>('login');
-  const [name, setName] = useState('');
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+  const [loginId, setLoginId] = useState('');
   const [user, setUser] = useState<ApiUser | null>(null);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
@@ -17,23 +14,21 @@ export default function AccountScreen() {
     api.me().then((result) => setUser(result.user)).catch(() => {});
   }, []);
 
-  async function submit() {
+  async function signIn() {
     setLoading(true);
     setMessage('');
     try {
-      const session = mode === 'register'
-        ? await api.register({ name, email, password })
-        : await api.login({ email, password });
+      const session = await api.login({ id: loginId.trim() });
       setUser(session.user);
       router.replace('/(tabs)');
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : 'Could not connect to your account.');
+      setMessage(error instanceof Error ? error.message : 'Could not sign in. Check the ID and try again.');
     } finally {
       setLoading(false);
     }
   }
 
-  async function logout() {
+  async function signOut() {
     await api.logout();
     setUser(null);
     setMessage('You are signed out.');
@@ -42,30 +37,27 @@ export default function AccountScreen() {
   return (
     <View style={styles.page}>
       <Pressable onPress={() => router.back()} accessibilityRole="button"><Text style={styles.back}>‹ Back to map</Text></Pressable>
-      <Text style={styles.title}>SafeTogether account</Text>
-      <Text style={styles.subtitle}>Sign in to sync reports, map layers, and help requests with the server.</Text>
+      <Text style={styles.title}>SafeTogether ID</Text>
+      <Text style={styles.subtitle}>Enter your ID. If it is new, we will create your account.</Text>
       {user ? (
         <View style={styles.card}>
           <Text style={styles.name}>{user.name}</Text>
-          <Text style={styles.subtitle}>{user.role === 'authority' ? 'Authority account' : 'Resident account'}</Text>
-          <Pressable style={styles.secondary} onPress={() => void logout()}><Text style={styles.secondaryText}>Sign out</Text></Pressable>
+          <Text style={styles.subtitle}>{user.role === 'authority' ? 'Authority account' : 'Signed in'}</Text>
+          <Text style={styles.accountIdLabel}>Account ID · share this to connect (not for sign-in)</Text>
+          <Text selectable style={styles.accountId}>{user.id}</Text>
+          <Pressable style={styles.secondary} onPress={() => void signOut()}><Text style={styles.secondaryText}>Sign out</Text></Pressable>
         </View>
       ) : (
         <View style={styles.card}>
-          <View style={styles.tabs}>
-            <Pressable onPress={() => setMode('login')} style={[styles.tab, mode === 'login' && styles.activeTab]}><Text style={styles.tabText}>Sign in</Text></Pressable>
-            <Pressable onPress={() => setMode('register')} style={[styles.tab, mode === 'register' && styles.activeTab]}><Text style={styles.tabText}>Create account</Text></Pressable>
-          </View>
-          {mode === 'register' && <TextInput value={name} onChangeText={setName} placeholder="Name" placeholderTextColor={colors.textDim} autoCapitalize="words" style={styles.input} />}
-          <TextInput value={email} onChangeText={setEmail} placeholder="Email" placeholderTextColor={colors.textDim} autoCapitalize="none" keyboardType="email-address" style={styles.input} />
-          <TextInput value={password} onChangeText={setPassword} placeholder={mode === 'register' ? 'Password (10+ characters)' : 'Password'} placeholderTextColor={colors.textDim} secureTextEntry style={styles.input} />
+          <TextInput value={loginId} onChangeText={setLoginId} placeholder="Enter your ID" placeholderTextColor={colors.textDim} autoCapitalize="none" autoCorrect={false} style={styles.input} />
           {message ? <Text accessibilityRole="alert" style={styles.message}>{message}</Text> : null}
-          <Pressable disabled={loading || !email || !password || (mode === 'register' && !name)} onPress={() => void submit()} style={[styles.primary, (loading || !email || !password || (mode === 'register' && !name)) && styles.disabled]}>
-            {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryText}>{mode === 'register' ? 'Create account' : 'Sign in'}</Text>}
+          <Pressable disabled={loading || !loginId.trim()} onPress={() => void signIn()} style={[styles.primary, (loading || !loginId.trim()) && styles.disabled]}>
+            {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryText}>Sign in</Text>}
           </Pressable>
-          <Text style={styles.note}>Authority accounts are provisioned by the server operator.</Text>
         </View>
       )}
+      {user && message ? <Text accessibilityRole="alert" style={styles.message}>{message}</Text> : null}
+      <Text style={styles.note}>Use the same ID next time. Keep it private; anyone with it can access your account.</Text>
     </View>
   );
 }
@@ -76,17 +68,15 @@ const styles = StyleSheet.create({
   title: { color: colors.text, fontSize: 26, fontWeight: '800' },
   subtitle: { color: colors.textMuted, fontSize: 14, lineHeight: 20, marginTop: 8 },
   card: { padding: 18, marginTop: 22, backgroundColor: colors.card, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.border, gap: 12 },
-  tabs: { flexDirection: 'row', gap: 8, marginBottom: 6 },
-  tab: { flex: 1, padding: 11, alignItems: 'center', borderRadius: radius.md, backgroundColor: colors.bg },
-  activeTab: { backgroundColor: colors.blueSoft },
-  tabText: { color: colors.text, fontWeight: '700' },
   input: { minHeight: 48, borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, paddingHorizontal: 13, color: colors.text, backgroundColor: colors.bg },
   primary: { minHeight: 48, justifyContent: 'center', alignItems: 'center', borderRadius: radius.md, backgroundColor: colors.blue },
   primaryText: { color: '#fff', fontSize: 15, fontWeight: '800' },
   disabled: { opacity: 0.5 },
-  message: { color: colors.red, lineHeight: 20 },
-  note: { color: colors.textMuted, fontSize: 12, lineHeight: 18 },
+  message: { color: colors.red, lineHeight: 20, marginTop: 10 },
+  note: { color: colors.textMuted, fontSize: 12, lineHeight: 18, marginTop: 14 },
   name: { color: colors.text, fontWeight: '800', fontSize: 20 },
-  secondary: { marginTop: 8, padding: 12, borderRadius: radius.md, backgroundColor: colors.bg, alignItems: 'center' },
+  secondary: { padding: 12, borderRadius: radius.md, backgroundColor: colors.bg, alignItems: 'center' },
   secondaryText: { color: colors.text, fontWeight: '700' },
+  accountIdLabel: { color: colors.textMuted, fontSize: 12, fontWeight: '700' },
+  accountId: { color: colors.text, fontSize: 13, fontWeight: '700' },
 });

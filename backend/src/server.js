@@ -29,6 +29,12 @@ async function init() {
   await mkdir(UPLOAD_DIR, { recursive: true });
   try { db = { ...emptyDb(), ...JSON.parse(await readFile(DB_FILE, 'utf8')) }; }
   catch (error) { if (error.code !== 'ENOENT') throw error; await persist(); }
+  const authorityLoginId = clean(process.env.SAFETOGETHER_AUTHORITY_ID, 100);
+  if (authorityLoginId && !findByLoginId(authorityLoginId)) {
+    const user = { id: id('usr'), name: 'Authority operator', role: 'authority', loginIdHash: loginIdDigest(authorityLoginId), createdAt: now() };
+    db.users.push(user);
+    await persist();
+  }
   const authorityEmail = process.env.SAFETOGETHER_AUTHORITY_EMAIL?.trim().toLowerCase();
   const authorityPassword = process.env.SAFETOGETHER_AUTHORITY_PASSWORD;
   if (authorityEmail && authorityPassword && !db.users.some((u) => u.email === authorityEmail)) {
@@ -44,7 +50,16 @@ const clean = (v, max = 500) => typeof v === 'string' ? v.trim().slice(0, max) :
 const fail = (status, message) => Object.assign(new Error(message), { status });
 const publicUser = ({ id: userId, name, role, createdAt }) => ({ id: userId, name, role, createdAt });
 const audit = (actorId, action, targetType, targetId, details = {}) => db.audit.unshift({ id: id('aud'), actorId, action, targetType, targetId, details, createdAt: now() });
-
+const loginIdDigest = (value) => createHmac('sha256', SECRET).update(value).digest('hex');
+function findByLoginId(value) {
+  if (typeof value !== 'string' || !value.trim()) return null;
+  const supplied = Buffer.from(loginIdDigest(value.trim()), 'hex');
+  return db.users.find((user) => {
+    if (!user.loginIdHash) return false;
+    const stored = Buffer.from(user.loginIdHash, 'hex');
+    return stored.length === supplied.length && timingSafeEqual(stored, supplied);
+  }) || null;
+}
 function tokenFor(userId) {
   const payload = Buffer.from(JSON.stringify({ sub: userId, exp: Date.now() + 7 * 86400000 })).toString('base64url');
   return `${payload}.${createHmac('sha256', SECRET).update(payload).digest('base64url')}`;
@@ -169,6 +184,18 @@ async function route(req, res) {
   if (parts[0] !== 'v1') throw fail(404, 'Route not found');
   const resource = parts[1]; const recordId = parts[2];
   if (method === 'GET' && resource === 'health') return send(res, 200, { status: 'ok', time: now() });
+
+  if (resource === 'auth' && method === 'POST' && parts[2] === 'id' && parts[3] === 'login') {
+    const body = await readBody(req); const loginId = clean(body.id, 100);
+    if (!loginId) throw fail(400, 'ID is required');
+    let user = findByLoginId(loginId);
+    const created = !user;
+    if (!user) {
+      user = { id: id('usr'), name: 'Community member', role: 'resident', loginIdHash: loginIdDigest(loginId), createdAt: now() };
+      db.users.push(user); await persist();
+    }
+    return send(res, 200, { token: tokenFor(user.id), user: publicUser(user), created });
+  }
 
   if (resource === 'auth' && method === 'POST' && parts[2] === 'register') {
     const body = await readBody(req); const email = clean(body.email, 254).toLowerCase(); const name = clean(body.name, 80); const password = typeof body.password === 'string' ? body.password : '';
@@ -377,7 +404,7 @@ async function route(req, res) {
     const data = db.connections.filter((c) => c.fromUserId === user.id || c.toUserId === user.id).map((c) => ({ id: c.id, status: c.status, user: publicUser(privateUser(c.fromUserId === user.id ? c.toUserId : c.fromUserId)) })); return send(res, 200, { data });
   }
   if (resource === 'connections' && method === 'POST') {
-    const body = await readBody(req); const target = db.users.find((u) => u.email === clean(body.email, 254).toLowerCase());
+    const body = await readBody(req); const target = db.users.find((u) => u.id === clean(body.userId, 100)) || db.users.find((u) => u.email && u.email === clean(body.email, 254).toLowerCase());
     if (!target || target.id === user.id) throw fail(404, 'Account not found');
     if (db.connections.some((c) => [c.fromUserId,c.toUserId].includes(user.id) && [c.fromUserId,c.toUserId].includes(target.id))) throw fail(409, 'Connection already exists');
     const row = { id: id('con'), fromUserId: user.id, toUserId: target.id, status: 'pending', createdAt: now() }; db.connections.push(row); await persist(); return send(res, 201, { data: { id: row.id, status: row.status } });

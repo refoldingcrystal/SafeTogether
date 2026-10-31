@@ -16,7 +16,7 @@ export class ApiError extends Error {
 }
 
 export type ApiUser = { id: string; name: string; role: 'resident' | 'authority'; createdAt: string };
-export type AuthSession = { token: string; user: ApiUser };
+export type AuthSession = { token: string; user: ApiUser; created?: boolean };
 export type HelpKind = 'resource' | 'emergency' | 'event' | 'Request resources' | 'Emergency' | 'Report an event';
 export type ApiIncident = {
   id: string;
@@ -151,16 +151,17 @@ function resolveHelpFeedPhotos(items: HelpFeedItem[]) {
 }
 
 export const api = {
-  async register(input: { name: string; email: string; password: string }) {
-    const session = await post('/auth/register', input, false) as AuthSession;
-    await saveToken(session.token);
-    return session;
-  },
-
-  async login(input: { email: string; password: string }) {
-    const session = await post('/auth/login', input, false) as AuthSession;
-    await saveToken(session.token);
-    return session;
+  async login(input: { id: string }) {
+    try {
+      const session = await post('/auth/id/login', input, false) as AuthSession;
+      await saveToken(session.token);
+      return session;
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 401 && error.message === 'Sign-in required') {
+        throw new Error('The API server is outdated. Restart it to load ID sign-in, then try again.');
+      }
+      throw error;
+    }
   },
 
   async logout() {
@@ -202,7 +203,7 @@ export const api = {
   clearLocation: () => request<void>('/location', { method: 'DELETE' }),
   getVisibleLocations: () => request<MapSnapshot['people']>('/locations'),
   getConnections: () => request<{ id: string; status: string; user: ApiUser }[]>('/connections'),
-  requestConnection: (email: string) => post('/connections', { email }),
+  requestConnection: (userId: string) => post('/connections', { userId }),
   respondToConnection: (connectionId: string, status: 'accepted' | 'rejected') =>
     request(`/connections/${encodeURIComponent(connectionId)}`, { method: 'PATCH', body: JSON.stringify({ status }) }),
 };
