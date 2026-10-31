@@ -92,7 +92,6 @@ export function DemoBar() {
   const app = useApp();
   return (
     <View style={styles.demo}>
-      <Text style={styles.demoLabel}>PRESENTER PANEL</Text>
       <View style={styles.demoRow}>
         <DemoToggle
           icon="flame"
@@ -194,8 +193,8 @@ const styles = StyleSheet.create({
   },
   buttonText: { fontSize: 15, fontWeight: '700' },
   card: { backgroundColor: colors.card, borderRadius: radius.lg, padding: 16, gap: 10, ...shadow },
-  needHelpButton: { alignItems: 'center', backgroundColor: colors.card, borderWidth: 1, borderColor: colors.blueSoft, paddingHorizontal: 20, paddingVertical: 12, borderRadius: radius.lg, ...shadow },
-  needHelpTitle: { color: colors.text, fontSize: 15, fontWeight: '800' },
+  needHelpButton: { alignItems: 'center', justifyContent: 'center', minWidth: 176, backgroundColor: colors.blue, paddingHorizontal: 24, paddingVertical: 16, borderRadius: radius.lg, ...shadow },
+  needHelpTitle: { color: '#fff', fontSize: 17, fontWeight: '900' },
   status: {
     height: 30,
     flexDirection: 'row',
@@ -206,8 +205,7 @@ const styles = StyleSheet.create({
   },
   statusTime: { fontWeight: '700', fontSize: 14, color: colors.text },
   statusIcons: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  demo: { backgroundColor: '#1D2939', paddingVertical: 8, paddingHorizontal: 12, gap: 6, alignItems: 'center' },
-  demoLabel: { color: '#98A2B3', fontSize: 10, fontWeight: '800', letterSpacing: 1.5 },
+  demo: { backgroundColor: '#1D2939', paddingVertical: 8, paddingHorizontal: 12, alignItems: 'center' },
   demoRow: { flexDirection: 'row', gap: 8, flexWrap: 'wrap', justifyContent: 'center' },
   demoBtn: {
     flexDirection: 'row',

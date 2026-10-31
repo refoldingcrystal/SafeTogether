@@ -18,7 +18,7 @@ type LocationMode = 'automatic' | 'manual';
 
 const helpKinds: { title: HelpKind; detail: string; icon: keyof typeof Ionicons.glyphMap; examples: string[] }[] = [
   { title: 'Emergency', detail: 'For example: medical emergency, fire, or trapped person', icon: 'medkit-outline', examples: ['Medical emergency', 'Fire', 'Trapped person'] },
-  { title: 'Report an event', detail: 'For example: flooding, road blockage, or damage', icon: 'alert-circle-outline', examples: ['Flooding', 'Road blockage', 'Infrastructure damage'] },
+  { title: 'Report an event', detail: 'For example: flooding, damage, unrest, or conflict', icon: 'alert-circle-outline', examples: ['Flooding', 'Road blockage', 'Infrastructure damage', 'Riot or civil unrest', 'Armed conflict or shelling'] },
   { title: 'Request resources', detail: 'For example: water, shelter, or transport', icon: 'cube-outline', examples: ['Food or water', 'Shelter', 'Transport'] },
 ];
 
@@ -163,7 +163,7 @@ export default function MapScreen() {
               <Text style={styles.kicker}>YOUR APPROXIMATE LOCATION</Text>
               <View style={styles.locationChoices}>
                 <Button icon="locate" label="Use current location" color={colors.blue} outline onPress={() => { setLocationMode('automatic'); void findCurrentLocation(); }} disabled={locationState === 'locating'} />
-                <Button label="Enter manually" color={colors.textMuted} outline onPress={() => setLocationMode('manual')} />
+                <Button label="Enter manually" color={colors.textMuted} outline onPress={() => { setLocationMode('manual'); setLocation(''); }} />
               </View>
               {locationMode === 'manual' ? (
                 <TextInput value={location} onChangeText={setLocation} placeholder="Neighbourhood or nearby landmark" placeholderTextColor={colors.textDim} style={styles.input} accessibilityLabel="Approximate location" />
