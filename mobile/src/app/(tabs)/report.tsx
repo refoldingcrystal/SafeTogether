@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { StyleSheet, Text, TextInput, View } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
+import * as Location from 'expo-location';
 import { ChoiceGrid } from '@/components/ChoiceGrid';
 import { Screen } from '@/components/Screen';
 import { Button, Card, Pill } from '@/components/ui';
@@ -10,6 +11,7 @@ import { useApp } from '@/state/app';
 import { colors, shared } from '@/theme';
 
 type SubmissionState = 'idle' | 'submitting' | 'failed';
+type LocationState = 'idle' | 'locating' | 'ready' | 'denied' | 'unavailable';
 
 const rules: Record<IncidentCategory, { minDescription: number; prompt: string }> = {
   'Medical emergency': { minDescription: 15, prompt: 'Include the person’s condition and what help is needed. Do not include their name.' },
@@ -26,12 +28,13 @@ export default function ReportScreen() {
   const app = useApp();
   const [attempted, setAttempted] = useState(false);
   const [submission, setSubmission] = useState<SubmissionState>('idle');
+  const [locationState, setLocationState] = useState<LocationState>('idle');
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const { category, description, location } = app.reportDraft;
   const rule = category ? rules[category] : null;
-  const descriptionValid = Boolean(rule && description.trim().length >= rule.minDescription);
-  const locationValid = location.trim().length >= 3;
-  const valid = category !== '' && descriptionValid && locationValid;
+  const hasDescription = description.trim().length > 0;
+  const descriptionValid = !hasDescription || Boolean(rule && description.trim().length >= rule.minDescription);
+  const valid = category !== '' && descriptionValid;
 
   useEffect(() => () => {
     if (timer.current) clearTimeout(timer.current);
@@ -59,6 +62,27 @@ export default function ReportScreen() {
         setSubmission('failed');
       }
     }, 650);
+  }
+
+  async function useCurrentLocation() {
+    if (locationState === 'locating') return;
+
+    setLocationState('locating');
+    try {
+      const permission = await Location.requestForegroundPermissionsAsync();
+      if (permission.status !== 'granted') {
+        setLocationState('denied');
+        return;
+      }
+
+      const current = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+      const latitude = current.coords.latitude.toFixed(2);
+      const longitude = current.coords.longitude.toFixed(2);
+      app.updateReportDraft({ location: `Current location (approx. ${latitude}, ${longitude})` });
+      setLocationState('ready');
+    } catch {
+      setLocationState('unavailable');
+    }
   }
 
   if (app.reportReceipt) {
@@ -89,7 +113,7 @@ export default function ReportScreen() {
   return (
     <Screen>
       <Text style={shared.title}>Report an emergency</Text>
-      <Text style={shared.subtitle}>Share clear, approximate information. Do not include names, private contacts, or a home address.</Text>
+      <Text style={shared.subtitle}>Choose a category to submit a demonstration report. Add safe, approximate details if you can; do not include names, private contacts, or a home address.</Text>
       <Text style={shared.notice}>If anyone is in immediate danger, call your local emergency number now. This demonstration does not contact emergency services.</Text>
 
       <Card>
@@ -114,14 +138,18 @@ export default function ReportScreen() {
           <Text style={shared.muted}>{rule?.prompt ?? 'Choose a category for guidance on the useful details to include.'}</Text>
           <Text style={shared.muted}>{description.length}/400</Text>
         </View>
-        {attempted && !descriptionValid && <Text style={styles.error}>{rule ? `Add at least ${rule.minDescription} characters for this category.` : 'Choose a category first.'}</Text>}
+        {attempted && hasDescription && !descriptionValid && <Text style={styles.error}>{rule ? `Use at least ${rule.minDescription} characters, or clear this optional field to submit without details.` : 'Choose a category first.'}</Text>}
       </Card>
 
       <Card>
         <Text style={shared.kicker}>APPROXIMATE LOCATION</Text>
         <TextInput value={location} onChangeText={(value) => app.updateReportDraft({ location: value })} placeholder="Neighbourhood or nearby landmark" placeholderTextColor={colors.textDim} style={shared.input} accessibilityLabel="Approximate location" />
+        <Button icon="locate" label={locationState === 'locating' ? 'Finding your location…' : 'Use my current location'} color={colors.blue} outline disabled={locationState === 'locating'} onPress={useCurrentLocation} />
         <Pill icon="lock-closed" label="Your exact address is never public" color={colors.blue} bg={colors.blueSoft} />
-        {attempted && !locationValid && <Text style={styles.error}>Add a neighbourhood or nearby landmark (at least 3 characters).</Text>}
+        <Text style={shared.muted}>We ask only while you use this button and round the result before placing it in this demonstration report.</Text>
+        {locationState === 'ready' && <Text style={styles.locationSuccess}>Approximate current location added. You can edit it before submitting.</Text>}
+        {locationState === 'denied' && <Text style={styles.error}>Location permission was not granted. You can still submit without it or enter an approximate landmark.</Text>}
+        {locationState === 'unavailable' && <Text style={styles.error}>Current location is unavailable. You can still submit without it or enter an approximate landmark.</Text>}
       </Card>
 
       {submission === 'failed' && (
@@ -146,4 +174,5 @@ export default function ReportScreen() {
 const styles = StyleSheet.create({
   fieldMeta: { flexDirection: 'row', justifyContent: 'space-between', gap: 12 },
   error: { color: colors.redDark, fontSize: 12, fontWeight: '700', lineHeight: 17 },
+  locationSuccess: { color: colors.green, fontSize: 12, fontWeight: '700', lineHeight: 17 },
 });
