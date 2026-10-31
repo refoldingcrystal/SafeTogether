@@ -546,7 +546,7 @@ const styles = StyleSheet.create({
   routeError: { color: colors.red, fontSize: 12, fontWeight: '700' },
   dangerInstruction: { fontSize: 13, fontWeight: '800' },
   bottom: { position: 'absolute', left: 0, right: 0, bottom: 0, padding: 12 },
-  sosRow: { alignItems: 'center', marginBottom: 4 },
+  sosRow: { alignItems: 'flex-start', marginBottom: 4 },
   helpPage: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, backgroundColor: colors.bg },
   helpContent: { padding: 20, paddingBottom: 40, gap: 12 },
   helpHeader: { flexDirection: 'row', alignItems: 'flex-start', gap: 12 },

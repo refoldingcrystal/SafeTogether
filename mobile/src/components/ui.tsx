@@ -58,8 +58,8 @@ export function Card({ children, style }: { children: ReactNode; style?: object 
 
 export function NeedHelpButton({ onPress }: { onPress: () => void }) {
   return (
-    <Pressable onPress={onPress} accessibilityRole="button" accessibilityLabel="Need help" style={({ pressed }) => [styles.needHelpButton, pressed && { opacity: 0.8 }]}>
-      <Text style={styles.needHelpTitle}>Need help</Text>
+    <Pressable onPress={onPress} accessibilityRole="button" accessibilityLabel="Help!" style={({ pressed }) => [styles.needHelpButton, pressed && { opacity: 0.8 }]}>
+      <Text style={styles.needHelpTitle}>Help!</Text>
     </Pressable>
   );
 }
@@ -151,8 +151,8 @@ const styles = StyleSheet.create({
   },
   buttonText: { fontSize: 15, fontWeight: '700' },
   card: { backgroundColor: colors.card, borderRadius: radius.lg, padding: 16, gap: 10, ...shadow },
-  needHelpButton: { alignItems: 'center', justifyContent: 'center', minWidth: 176, backgroundColor: colors.red, paddingHorizontal: 24, paddingVertical: 16, borderRadius: radius.pill, ...shadow },
-  needHelpTitle: { color: '#fff', fontSize: 17, fontWeight: '900' },
+  needHelpButton: { width: 68, height: 68, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.red, borderRadius: 34, ...shadow },
+  needHelpTitle: { color: '#fff', fontSize: 16, fontWeight: '900' },
   status: {
     height: 30,
     flexDirection: 'row',
