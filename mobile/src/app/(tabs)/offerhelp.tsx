@@ -1,26 +1,18 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { Alert, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { router, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Button, Card, Pill } from '@/components/ui';
-import { ApproximateLocationPicker } from '@/components/ApproximateLocationPicker';
+import { CoordinationChat } from '@/components/CoordinationChat';
 import mock from '@/data/mock.json';
 import { helpCategories } from '@/shared/demo';
 import { useApp } from '@/state/app';
-import type { ApproximateLocation } from '@/shared/models';
+import { getApproximateCurrentLocation } from '@/shared/location';
 import { api, type HelpFeedItem as ApiHelpFeedItem } from '@/services/api';
 import { colors, radius, shadow } from '@/theme';
 
 type HelpFeedItem = ApiHelpFeedItem;
-
-type ChatMessage = { id: string; text: string; sentAt: string };
-
-const toChatMessage = (message: { id: string; text: string; sentAt: string }): ChatMessage => ({
-  id: message.id,
-  text: message.text,
-  sentAt: new Date(message.sentAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-});
 
 export default function HelpScreen() {
   const app = useApp();
@@ -28,11 +20,9 @@ export default function HelpScreen() {
   const [offerModalVisible, setOfferModalVisible] = useState(false);
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
   const [description, setDescription] = useState('');
-  const [offerLocation, setOfferLocation] = useState<ApproximateLocation | null>(null);
   const [feedItems, setFeedItems] = useState<HelpFeedItem[]>(mock.helpFeed as HelpFeedItem[]);
   const [editingOfferId, setEditingOfferId] = useState<string | null>(null);
   const [activeChat, setActiveChat] = useState<HelpFeedItem | null>(null);
-  const [chatThreads, setChatThreads] = useState<Record<string, ChatMessage[]>>({});
   const visibleFeedItems = useMemo(() => feedItems.filter((item) => item.type === 'offer' ? item.isMine === true : item.isMine !== true), [feedItems]);
 
   useFocusEffect(useCallback(() => {
@@ -41,21 +31,10 @@ export default function HelpScreen() {
     return () => { active = false; };
   }, []));
 
-  useEffect(() => {
-    if (!activeChat) return;
-    const refresh = () => api.getMessages(activeChat.id)
-      .then((messages) => setChatThreads((current) => ({ ...current, [activeChat.id]: messages.map(toChatMessage) })))
-      .catch(() => {});
-    void refresh();
-    const timer = setInterval(() => { void refresh(); }, 4000);
-    return () => clearInterval(timer);
-  }, [activeChat]);
-
   function closeOfferModal() {
     setOfferModalVisible(false);
     setSelectedCategories([]);
     setDescription('');
-    setOfferLocation(null);
     setEditingOfferId(null);
   }
 
@@ -70,14 +49,11 @@ export default function HelpScreen() {
       Alert.alert('Choose what you can offer', 'Select at least one type of help.');
       return;
     }
-    if (offerLocation?.latitude == null || offerLocation.longitude == null) {
-      Alert.alert('Set a map location', 'Use your current location so people can find this offer on the map.');
-      return;
-    }
     try {
+      const approximateLocation = await getApproximateCurrentLocation();
       const offer = editingOfferId
-        ? await api.updateOffer(editingOfferId, { categories: selectedCategories, description: description.trim(), approximateLocation: offerLocation })
-        : await api.createOffer({ categories: selectedCategories, description: description.trim(), approximateLocation: offerLocation });
+        ? await api.updateOffer(editingOfferId, { categories: selectedCategories, description: description.trim(), approximateLocation })
+        : await api.createOffer({ categories: selectedCategories, description: description.trim(), approximateLocation });
       setEditingOfferId(offer.id);
       setFeedItems(await api.getHelpFeed());
       closeOfferModal();
@@ -90,7 +66,6 @@ export default function HelpScreen() {
     setEditingOfferId(offer.id);
     setSelectedCategories(offer.tags);
     setDescription(offer.description || '');
-    setOfferLocation(offer.approximateLocation || null);
     setOfferModalVisible(true);
   }
 
@@ -99,18 +74,6 @@ export default function HelpScreen() {
       { text: 'Keep offering', style: 'cancel' },
       { text: 'Stop offering', style: 'destructive', onPress: () => { void api.stopOffering(offerId).then(async () => setFeedItems(await api.getHelpFeed())).catch((error) => Alert.alert('Could not stop offering', error instanceof Error ? error.message : 'Please try again.')); } },
     ]);
-  }
-
-  async function sendChatMessage(requestId: string, text: string) {
-    const message = text.trim();
-    if (!message) return;
-    try {
-      await api.sendMessage(requestId, message);
-      const messages = await api.getMessages(requestId);
-      setChatThreads((current) => ({ ...current, [requestId]: messages.map(toChatMessage) }));
-    } catch (error) {
-      Alert.alert('Message not sent', error instanceof Error ? error.message : 'Please sign in and try again.');
-    }
   }
 
   function openChat(item: HelpFeedItem) {
@@ -160,18 +123,14 @@ export default function HelpScreen() {
         editing={editingOfferId !== null}
         selectedCategories={selectedCategories}
         description={description}
-        offerLocation={offerLocation}
         onClose={closeOfferModal}
         onToggleCategory={toggleCategory}
         onChangeDescription={setDescription}
-        onChangeLocation={setOfferLocation}
         onPublish={publishOffer}
       />
       <CoordinationChat
         request={activeChat}
-        messages={activeChat ? chatThreads[activeChat.id] || [] : []}
         onClose={() => setActiveChat(null)}
-        onSend={(text) => activeChat && void sendChatMessage(activeChat.id, text)}
       />
     </ScrollView>
   );
@@ -182,22 +141,18 @@ function OfferHelpModal({
   editing,
   selectedCategories,
   description,
-  offerLocation,
   onClose,
   onToggleCategory,
   onChangeDescription,
-  onChangeLocation,
   onPublish,
 }: {
   visible: boolean;
   editing: boolean;
   selectedCategories: string[];
   description: string;
-  offerLocation: ApproximateLocation | null;
   onClose: () => void;
   onToggleCategory: (category: string) => void;
   onChangeDescription: (value: string) => void;
-  onChangeLocation: (value: ApproximateLocation | null) => void;
   onPublish: () => void;
 }) {
   return (
@@ -235,8 +190,7 @@ function OfferHelpModal({
               })}
             </View>
 
-            <ApproximateLocationPicker value={offerLocation} onChange={onChangeLocation} />
-            <Text style={styles.mapLocationHint}>Use current location to place this offer on other people’s maps. Typed locations can’t create a map pin.</Text>
+            <Text style={styles.mapLocationHint}>We’ll use your current location, shifted randomly by up to 500 m.</Text>
 
             <View style={styles.fieldGroup}>
               <Text style={styles.sectionLabel}>DESCRIPTION <Text style={styles.optional}>(OPTIONAL)</Text></Text>
@@ -256,83 +210,11 @@ function OfferHelpModal({
           </ScrollView>
 
           <View style={styles.modalActions}>
-            <Button label={editing ? 'Save changes' : 'Publish offer'} icon={editing ? 'checkmark' : 'hand-left'} color={colors.green} disabled={!selectedCategories.length || offerLocation?.latitude == null || offerLocation.longitude == null} onPress={onPublish} />
+            <Button label={editing ? 'Save changes' : 'Publish offer'} icon={editing ? 'checkmark' : 'hand-left'} color={colors.green} disabled={!selectedCategories.length} onPress={onPublish} />
             <Pressable onPress={onClose} style={styles.cancelButton} accessibilityRole="button">
               <Text style={styles.cancelText}>Cancel</Text>
             </Pressable>
           </View>
-        </View>
-      </KeyboardAvoidingView>
-    </Modal>
-  );
-}
-
-function CoordinationChat({ request, messages, onClose, onSend }: {
-  request: HelpFeedItem | null;
-  messages: ChatMessage[];
-  onClose: () => void;
-  onSend: (text: string) => void;
-}) {
-  const [draft, setDraft] = useState('');
-
-  function send() {
-    const text = draft.trim();
-    if (!text) return;
-    onSend(text);
-    setDraft('');
-  }
-
-  return (
-    <Modal visible={request !== null} transparent animationType="slide" onRequestClose={onClose} statusBarTranslucent>
-      <KeyboardAvoidingView style={styles.modalRoot} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
-        <Pressable style={styles.scrim} onPress={onClose} accessibilityLabel="Close chat" />
-        <View style={styles.chatSheet}>
-          <View style={styles.chatHeader}>
-            <View style={styles.chatHeaderText}>
-              <Text style={styles.modalTitle}>Coordinate help</Text>
-              <Text style={styles.modalSubtitle}>{request?.author} · {request?.title}</Text>
-            </View>
-            <Pressable onPress={onClose} style={styles.closeButton} accessibilityRole="button" accessibilityLabel="Close chat">
-              <Ionicons name="close" size={22} color={colors.textMuted} />
-            </Pressable>
-          </View>
-
-          <ScrollView style={styles.chatConversation} contentContainerStyle={styles.chatConversationContent} keyboardShouldPersistTaps="always">
-            <View style={styles.messagesContent}>
-            {messages.length === 0 ? (
-              <View style={styles.emptyChat}>
-                <Ionicons name="chatbubbles-outline" size={28} color={colors.blue} />
-                <Text style={styles.emptyChatTitle}>Start coordinating</Text>
-                <Text style={styles.emptyChatBody}>Ask what is needed and agree on a safe way to help. Avoid sharing sensitive personal details.</Text>
-              </View>
-            ) : messages.map((message) => (
-              <View key={message.id} style={styles.messageRow}>
-                <View style={styles.outgoingBubble}>
-                  <Text style={styles.outgoingText}>{message.text}</Text>
-                  <Text style={styles.messageTime}>{message.sentAt}</Text>
-                </View>
-              </View>
-            ))}
-            </View>
-
-            <View style={styles.chatComposer}>
-              <Text style={styles.chatDemoNote}>Messages sync through the server. Avoid sharing sensitive personal details.</Text>
-              <View style={styles.composerRow}>
-                <TextInput
-                  value={draft}
-                  onChangeText={setDraft}
-                  placeholder="Write a message…"
-                  placeholderTextColor={colors.textDim}
-                  style={styles.messageInput}
-                  maxLength={500}
-                  multiline
-                />
-                <Pressable onPress={send} disabled={!draft.trim()} style={[styles.sendButton, !draft.trim() && styles.sendButtonDisabled]} accessibilityRole="button" accessibilityLabel="Send message">
-                  <Ionicons name="send" size={18} color="#fff" />
-                </Pressable>
-              </View>
-            </View>
-          </ScrollView>
         </View>
       </KeyboardAvoidingView>
     </Modal>
@@ -431,24 +313,5 @@ const styles = StyleSheet.create({
   modalActions: { paddingHorizontal: 20, paddingTop: 10, borderTopWidth: 1, borderTopColor: colors.border, gap: 4 },
   cancelButton: { height: 38, alignItems: 'center', justifyContent: 'center' },
   cancelText: { color: colors.textMuted, fontWeight: '700', fontSize: 14 },
-  chatSheet: { height: '78%', maxHeight: '88%', backgroundColor: colors.card, borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingTop: 18, paddingBottom: Platform.OS === 'ios' ? 26 : 16, ...shadow },
-  chatHeader: { minHeight: 64, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10, paddingHorizontal: 18, paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: colors.border },
-  chatHeaderText: { flex: 1, gap: 4 },
-  chatConversation: { flex: 1 },
-  chatConversationContent: { flexGrow: 1, justifyContent: 'space-between' },
-  messagesContent: { flexGrow: 1, justifyContent: 'flex-end', padding: 16, gap: 10 },
-  emptyChat: { alignItems: 'center', alignSelf: 'center', maxWidth: 260, gap: 8, paddingVertical: 24 },
-  emptyChatTitle: { color: colors.text, fontSize: 16, fontWeight: '800' },
-  emptyChatBody: { color: colors.textMuted, fontSize: 13, lineHeight: 18, textAlign: 'center' },
-  messageRow: { alignItems: 'flex-end' },
-  outgoingBubble: { maxWidth: '84%', backgroundColor: colors.blue, borderRadius: 16, borderBottomRightRadius: 5, paddingHorizontal: 12, paddingVertical: 9, gap: 4 },
-  outgoingText: { color: '#fff', fontSize: 14, lineHeight: 19 },
-  messageTime: { color: '#D1E9FF', fontSize: 10, alignSelf: 'flex-end' },
-  chatComposer: { paddingHorizontal: 14, paddingTop: 8, borderTopWidth: 1, borderTopColor: colors.border, gap: 7 },
-  chatDemoNote: { color: colors.textDim, fontSize: 11, textAlign: 'center' },
-  composerRow: { flexDirection: 'row', alignItems: 'flex-end', gap: 8 },
-  messageInput: { flex: 1, maxHeight: 100, minHeight: 44, backgroundColor: colors.bg, borderColor: colors.border, borderWidth: 1, borderRadius: 20, paddingHorizontal: 14, paddingVertical: 10, color: colors.text, fontSize: 14 },
-  sendButton: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.blue },
-  sendButtonDisabled: { opacity: 0.45 },
   offerActions: { gap: 8 },
 });

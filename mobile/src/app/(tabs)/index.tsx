@@ -1,18 +1,18 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Alert, Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { router, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
-import * as ImagePicker from 'expo-image-picker';
 import { TacticalMap } from '@/components/TacticalMap';
-import { ApproximateLocationPicker } from '@/components/ApproximateLocationPicker';
-import { Button, Card, NeedHelpButton, StatusBadge } from '@/components/ui';
+import { CoordinationChat, type CoordinationRequest } from '@/components/CoordinationChat';
+import { Button, Card, NeedHelpButton } from '@/components/ui';
 import mock from '@/data/mock.json';
-import { categoryIcons, incidentColors, incidentGuide } from '@/icons';
+import { categoryIcons, incidentColors } from '@/icons';
 import { demonstrationDangerZones, demonstrationHelpOffers, demonstrationIncidents, emergencySites, nearbyPeople, type Coordinate, type DangerZone, type EmergencySite, type MapHelpOffer } from '@/shared/demo';
 import { api, type MapSnapshot } from '@/services/api';
-import type { ApproximateLocation, Incident, PersonalHelpCategory } from '@/shared/models';
+import type { Incident, PersonalHelpCategory } from '@/shared/models';
+import { getApproximateCurrentLocation } from '@/shared/location';
 import { requestSafeRoadRoute, type SafeRoute } from '@/shared/routing';
 import { useApp } from '@/state/app';
 import { colors, radius } from '@/theme';
@@ -36,15 +36,15 @@ export default function MapScreen() {
   const [helpKind, setHelpKind] = useState<HelpKind | null>(null);
   const [request, setRequest] = useState('');
   const [details, setDetails] = useState('');
-  const [requestLocation, setRequestLocation] = useState<ApproximateLocation | null>(null);
   const [dangerZones, setDangerZones] = useState(demonstrationDangerZones);
   const [sites, setSites] = useState(emergencySites);
   const [helpOffers, setHelpOffers] = useState<MapHelpOffer[]>(demonstrationHelpOffers);
   const [allIncidents, setAllIncidents] = useState(demonstrationIncidents);
   const [mapLocation, setMapLocation] = useState<Coordinate>(mock.me);
   const [submitting, setSubmitting] = useState(false);
+  const [activeIncidentId, setActiveIncidentId] = useState<string | null>(null);
+  const [markingSafe, setMarkingSafe] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
-  const [incidentPhotos, setIncidentPhotos] = useState<{ uri: string; data: string }[]>([]);
 
   useFocusEffect(useCallback(() => {
     let active = true;
@@ -55,11 +55,12 @@ export default function MapScreen() {
       setSites(mapSites);
       setHelpOffers(snapshot.helpFeed.flatMap((item) => {
         const location = item.approximateLocation;
-        if (item.type !== 'offer' || item.isMine || location?.latitude == null || location.longitude == null) return [];
+        if (item.type !== 'offer' || location?.latitude == null || location.longitude == null) return [];
         return [{ id: item.id, title: item.title, description: item.description, author: item.author, distance: item.distance, coordinate: { latitude: location.latitude, longitude: location.longitude } }];
       }));
       setAllIncidents(snapshot.incidents.map((item) => ({
         id: item.id,
+        reporterName: item.reporterName,
         category: item.category,
         description: item.description,
         approximateLocation: item.approximateLocation,
@@ -67,7 +68,6 @@ export default function MapScreen() {
         updatedAt: item.updatedAt,
         source: item.source,
         verificationStatus: item.verificationStatus,
-        incidentStatus: item.status,
       })));
     }).catch(() => {
       if (!active) return;
@@ -97,6 +97,8 @@ export default function MapScreen() {
     return () => { active = false; };
   }, []);
 
+  const [activeChat, setActiveChat] = useState<CoordinationRequest | null>(null);
+
   const incidents = allIncidents;
   const nearestSafe = useMemo(() => nearestSafeSite(sites, mapLocation), [mapLocation, sites]);
   const mapNearbyPeople = useMemo(() => nearbyPeople.map((person) => ({
@@ -123,13 +125,12 @@ export default function MapScreen() {
   }
 
   async function submitHelpRequest() {
-    if (!helpKind || !requestLocation || submitting) return;
+    if (!helpKind || submitting) return;
     setSubmitting(true);
     setSubmitError(null);
-    const approximateLocation = requestLocation;
     let submitted = false;
-    let photoUploadFailed = false;
     try {
+      const approximateLocation = await getApproximateCurrentLocation();
       if (helpKind === 'Request resources') {
         await api.createHelpRequest({ kind: 'resource', title: request || undefined, categories: [request || 'Other practical help'], description: details, approximateLocation });
         submitted = true;
@@ -138,28 +139,23 @@ export default function MapScreen() {
         const category: PersonalHelpCategory = personalCategories.includes(request as PersonalHelpCategory)
           ? request as PersonalHelpCategory
           : 'Other personal assistance';
-        const description = details.trim() || (category === 'Other personal assistance' && request.trim() ? request.trim() : `Needs help: ${category.toLowerCase()}`);
+        const description = details.trim();
         const incident = await api.createIncident({ category, description, approximateLocation, shareWithAuthorities: true });
+        setActiveIncidentId(incident.id);
         submitted = true;
-        for (const photo of incidentPhotos) {
-          try { await api.uploadIncidentPhoto(incident.id, photo.data); } catch { photoUploadFailed = true; }
-        }
       }
       setHelpMenuOpen(false);
-      setIncidentPhotos([]);
       if (helpKind !== 'Request resources') app.setSos(true);
       try {
         const snapshot = await api.getMap();
         setDangerZones(withDemonstrationHazards(snapshot.dangerZones));
         const mapSites = withDemonstrationSites(toMapSites(snapshot));
         setSites(mapSites);
-        setAllIncidents(snapshot.incidents.map((item) => ({ id: item.id, category: item.category, description: item.description, approximateLocation: item.approximateLocation, submittedAt: item.submittedAt, updatedAt: item.updatedAt, source: item.source, verificationStatus: item.verificationStatus, incidentStatus: item.status })));
+        setAllIncidents(snapshot.incidents.map((item) => ({ id: item.id, reporterName: item.reporterName, category: item.category, description: item.description, approximateLocation: item.approximateLocation, submittedAt: item.submittedAt, updatedAt: item.updatedAt, source: item.source, verificationStatus: item.verificationStatus })));
       } catch { /* The submission succeeded; keep the currently loaded map. */ }
-      if (photoUploadFailed) Alert.alert('Report sent', 'Your report was received, but one or more photos could not be uploaded.');
     } catch (error) {
       if (submitted) {
         setHelpMenuOpen(false);
-        setIncidentPhotos([]);
         if (helpKind !== 'Request resources') app.setSos(true);
         Alert.alert('Request sent', 'Your request was received. The map could not refresh.');
       } else {
@@ -170,20 +166,26 @@ export default function MapScreen() {
     }
   }
 
-  async function addIncidentPhotos() {
-    const remaining = 3 - incidentPhotos.length;
-    if (remaining <= 0) return;
-    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], allowsMultipleSelection: true, selectionLimit: remaining, quality: 0.8, base64: true });
-    if (result.canceled) return;
-    const tooLarge = result.assets.some((asset) => asset.fileSize && asset.fileSize > 5 * 1024 * 1024);
-    if (tooLarge) Alert.alert('Photo too large', 'Choose photos smaller than 5 MB each.');
-    const accepted = result.assets.filter((asset) => (!asset.fileSize || asset.fileSize <= 5 * 1024 * 1024) && !!asset.base64);
-    setIncidentPhotos((current) => [...current, ...accepted.map((asset) => ({ uri: asset.uri, data: `data:image/jpeg;base64,${asset.base64}` }))].slice(0, 3));
-  }
-
   async function openHelpMenu() {
     setHelpMenuOpen(true);
-    setRequestLocation(null);
+  }
+
+  async function markSafe() {
+    if (markingSafe) return;
+    setMarkingSafe(true);
+    try {
+      if (activeIncidentId) {
+        await api.deleteIncident(activeIncidentId);
+        setAllIncidents((current) => current.filter((incident) => incident.id !== activeIncidentId));
+        setSelectedId((current) => current === activeIncidentId ? null : current);
+      }
+      setActiveIncidentId(null);
+      app.setSos(false);
+    } catch (error) {
+      Alert.alert('Could not close help request', error instanceof Error ? error.message : 'Please try again when you have a connection.');
+    } finally {
+      setMarkingSafe(false);
+    }
   }
 
   return (
@@ -248,6 +250,8 @@ export default function MapScreen() {
           routeLoading={routeLoading}
           routeError={routeError}
           nearestSafe={nearestSafe}
+          markingSafe={markingSafe}
+          onMarkSafe={() => { void markSafe(); }}
           onPlanNearest={() => {
             if (!nearestSafe) return;
             setSafeRoute(null);
@@ -264,6 +268,7 @@ export default function MapScreen() {
             setRouteError(null);
             setCustomDestination(null);
           }}
+        onChat={(incident) => setActiveChat({ id: incident.id, author: incident.reporterName, title: incident.category })}
           onClose={() => {
             setSelectedId(null);
             setSelectedDangerId(null);
@@ -271,6 +276,7 @@ export default function MapScreen() {
           }}
         />
       </View>
+      <CoordinationChat request={activeChat} onClose={() => setActiveChat(null)} />
       {helpMenuOpen && (
         <View style={styles.helpPage}>
           <ScrollView contentContainerStyle={styles.helpContent}>
@@ -281,12 +287,11 @@ export default function MapScreen() {
             {(Object.keys(helpKinds) as HelpKind[]).map((kind) => <Pressable key={kind} onPress={() => { setHelpKind(kind); setRequest(''); }} style={[styles.helpOption, helpKind === kind && styles.helpOptionActive]}><Text style={styles.optionTitle}>{kind}</Text><Text style={styles.optionDetail}>{helpKinds[kind].join(' · ')}</Text></Pressable>)}
             {helpKind && <View style={styles.quickChoices}>{helpKinds[helpKind].map((example) => <Pressable key={example} onPress={() => setRequest(example)} style={[styles.quickChoice, request === example && styles.quickChoiceActive]}><Text style={styles.quickChoiceText}>{example}</Text></Pressable>)}</View>}
             {helpKind && <TextInput value={request} onChangeText={setRequest} placeholder={helpKind === 'Emergency' ? 'Describe the help you need (optional)' : 'Other resource or request (optional)'} placeholderTextColor={colors.textDim} style={styles.input} />}
-            <ApproximateLocationPicker value={requestLocation} onChange={setRequestLocation} />
+            <Text style={styles.muted}>We’ll use your current location, shifted randomly by up to 500 m.</Text>
             <Text style={styles.kicker}>ADDITIONAL DETAILS (OPTIONAL)</Text><TextInput value={details} onChangeText={setDetails} placeholder="What help do you need?" placeholderTextColor={colors.textDim} style={[styles.input, styles.detailsInput]} multiline textAlignVertical="top" />
-            {helpKind !== 'Request resources' && <View style={styles.photoField}><Text style={styles.kicker}>PHOTOS (OPTIONAL · UP TO 3)</Text><Button label="Add photos" icon="image-outline" color={colors.blue} outline onPress={() => { void addIncidentPhotos(); }} /><View style={styles.photoRow}>{incidentPhotos.map((photo) => <Pressable key={photo.uri} onPress={() => setIncidentPhotos((current) => current.filter((item) => item.uri !== photo.uri))} accessibilityRole="button" accessibilityLabel="Remove photo"><Image source={{ uri: photo.uri }} style={styles.photoPreview} /></Pressable>)}</View></View>}
             <Text style={styles.disclaimer}>Your request will be shared with the SafeTogether community. Incident reports are also available to authorities. For immediate danger, call local emergency services.</Text>
             {submitError && <Text accessibilityRole="alert" style={styles.submitError}>{submitError}</Text>}
-            <Button label={submitting ? 'Sending…' : 'Send help request'} icon="send" disabled={!helpKind || submitting || !requestLocation} onPress={() => { void submitHelpRequest(); }} />
+            <Button label={submitting ? 'Sending…' : 'Send help request'} icon="send" disabled={!helpKind || submitting} onPress={() => { void submitHelpRequest(); }} />
           </ScrollView>
         </View>
       )}
@@ -338,9 +343,12 @@ function BottomCard({
   routeLoading,
   routeError,
   nearestSafe,
+  markingSafe,
+  onMarkSafe,
   onPlanNearest,
   onPlanSite,
   onCloseRoute,
+  onChat,
   onClose,
 }: {
   selectedIncident?: Incident;
@@ -350,9 +358,12 @@ function BottomCard({
   routeLoading: boolean;
   routeError: string | null;
   nearestSafe: { site: EmergencySite; distanceKm: number } | null;
+  markingSafe: boolean;
+  onMarkSafe: () => void;
   onPlanNearest: () => void;
   onPlanSite: (site: EmergencySite) => void;
   onCloseRoute: () => void;
+  onChat: (incident: Incident) => void;
   onClose: () => void;
 }) {
   const app = useApp();
@@ -388,7 +399,7 @@ function BottomCard({
               <Text style={styles.muted}>This demonstration has not contacted responders or other people.</Text>
             </View>
           </View>
-          <Button icon="shield-checkmark" label="I am safe" color={colors.green} onPress={() => app.setSos(false)} />
+          <Button icon="shield-checkmark" label={markingSafe ? 'Closing request…' : 'I am safe'} color={colors.green} disabled={markingSafe} onPress={onMarkSafe} />
         </Card>
       </Animated.View>
     );
@@ -462,7 +473,6 @@ function BottomCard({
 
   if (incident) {
     const color = incidentColors[incident.category] ?? colors.blue;
-    const guide = incidentGuide[incident.category];
     return (
       <Animated.View entering={FadeInDown} key={incident.id}>
         <Card>
@@ -471,7 +481,7 @@ function BottomCard({
               <Ionicons name={categoryIcons[incident.category] ?? 'alert'} size={20} color="#fff" />
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={[styles.kicker, { color }]}>COMMUNITY REPORT · {incident.id}</Text>
+              <Text style={[styles.kicker, { color }]}>{incident.reporterName} reported</Text>
               <Text style={styles.title}>{incident.category}</Text>
             </View>
             <Pressable onPress={onClose} accessibilityRole="button" accessibilityLabel="Close" hitSlop={10}>
@@ -480,15 +490,11 @@ function BottomCard({
           </View>
           <Text style={styles.body}>{incident.description}</Text>
           <View style={styles.row}>
-            <StatusBadge status={incident.verificationStatus} />
-            <Info icon="information-circle" text={incident.incidentStatus.replace('_', ' ')} />
-          </View>
-          <View style={styles.row}>
             <Info icon="location" text={`Approx. ${incident.approximateLocation.label}`} />
             <Info icon="time" text={formatIncidentTime(incident.submittedAt)} />
           </View>
           {incident.source === 'authority' && <Text style={styles.muted}>Submitted by an authority</Text>}
-          {guide && <Button icon="book" label="Open safety guide" color={colors.blue} outline onPress={() => router.push(`/guide/${guide}`)} />}
+          <Button icon="chatbubble-ellipses" label="Chat" color={colors.blue} onPress={() => onChat(incident)} />
         </Card>
       </Animated.View>
     );
@@ -562,9 +568,6 @@ const styles = StyleSheet.create({
   detailsInput: { minHeight: 92 },
   disclaimer: { color: colors.orange, backgroundColor: colors.orangeSoft, borderRadius: radius.md, padding: 10, fontSize: 12, fontWeight: '600', lineHeight: 17 },
   submitError: { color: colors.red, fontSize: 13, fontWeight: '700' },
-  photoField: { gap: 8 },
-  photoRow: { flexDirection: 'row', gap: 8 },
-  photoPreview: { width: 60, height: 60, borderRadius: radius.sm },
   kicker: { fontSize: 11, fontWeight: '800', letterSpacing: 0.8, color: colors.textDim },
   title: { fontSize: 18, fontWeight: '800', color: colors.text },
   body: { fontSize: 14, color: colors.text },

@@ -39,7 +39,6 @@ export const incidentColors: Record<string, string> = {
 
 export const verificationMeta: Record<VerificationStatus, { label: string; color: string; bg: string; icon: IconName }> = {
   verified: { label: 'Verified', color: colors.green, bg: colors.greenSoft, icon: 'checkmark-circle' },
-  awaiting_review: { label: 'Awaiting review', color: colors.orange, bg: colors.orangeSoft, icon: 'time' },
   unverified: { label: 'Unverified', color: colors.red, bg: colors.redSoft, icon: 'alert-circle' },
   rejected: { label: 'Rejected', color: colors.textMuted, bg: colors.bg, icon: 'close-circle' },
 };

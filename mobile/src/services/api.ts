@@ -20,6 +20,7 @@ export type AuthSession = { token: string; user: ApiUser; created?: boolean };
 export type HelpKind = 'resource' | 'emergency' | 'Request resources' | 'Emergency';
 export type ApiIncident = {
   id: string;
+  reporterName: string;
   category: IncidentCategory;
   description: string;
   approximateLocation: ApproximateLocation;
@@ -28,7 +29,6 @@ export type ApiIncident = {
   source: 'community' | 'authority';
   verificationStatus: VerificationStatus;
   status: IncidentStatus;
-  attachments: { id: string; mimeType: string; url: string }[];
 };
 
 export type HelpFeedItem = {
@@ -181,8 +181,8 @@ export const api = {
   sendMessage: (requestId: string, text: string) => post(`/help-requests/${encodeURIComponent(requestId)}/messages`, { text }) as Promise<HelpMessage>,
 
   getIncidents: () => request<ApiIncident[]>('/incidents'),
-  createIncident: (input: { category: PersonalHelpCategory; description: string; approximateLocation: ApproximateLocation | string; shareWithAuthorities?: boolean }) => request<{ id: string }>('/incidents', { method: 'POST', body: JSON.stringify(input) }),
-  uploadIncidentPhoto: (incidentId: string, dataUrl: string) => post(`/incidents/${encodeURIComponent(incidentId)}/attachments`, { data: dataUrl }),
+  createIncident: (input: { category: PersonalHelpCategory; description?: string; approximateLocation: ApproximateLocation | string; shareWithAuthorities?: boolean }) => request<{ id: string }>('/incidents', { method: 'POST', body: JSON.stringify(input) }),
+  deleteIncident: (incidentId: string) => request<void>(`/incidents/${encodeURIComponent(incidentId)}`, { method: 'DELETE' }),
   getNotices: () => request<OfficialNotice[]>('/notices'),
   getRendezvousPoints: () => request<MapSnapshot['rendezvousPoints']>('/rendezvous'),
   getEmergencySites: () => request<EmergencySite[]>('/emergency-sites'),

@@ -13,15 +13,13 @@ import { colors, shared } from '@/theme';
 export default function OfferScreen() {
   const [category, setCategory] = useState<HelpCategory | ''>('');
   const [description, setDescription] = useState('');
-  const [location, setLocation] = useState('');
   const [published, setPublished] = useState(false);
-  const valid = category !== '' && description.trim().length >= 5 && location.trim().length >= 2;
+  const valid = category !== '';
 
   function reset() {
     setPublished(false);
     setCategory('');
     setDescription('');
-    setLocation('');
   }
 
   const back = (
@@ -61,7 +59,7 @@ export default function OfferScreen() {
       </Card>
 
       <Card>
-        <Text style={shared.kicker}>DESCRIBE YOUR OFFER</Text>
+        <Text style={shared.kicker}>DESCRIPTION (OPTIONAL)</Text>
         <TextInput
           value={description}
           onChangeText={setDescription}
@@ -74,9 +72,7 @@ export default function OfferScreen() {
       </Card>
 
       <Card>
-        <Text style={shared.kicker}>APPROXIMATE LOCATION</Text>
-        <TextInput value={location} onChangeText={setLocation} placeholder="Neighbourhood or nearby landmark" placeholderTextColor={colors.textDim} style={shared.input} />
-        <Pill icon="lock-closed" label="Your exact address and contact details are never public" color={colors.blue} bg={colors.blueSoft} />
+        <Pill icon="locate" label="Your approximate current location is used automatically" color={colors.blue} bg={colors.blueSoft} />
       </Card>
 
       <Text style={shared.notice}>Do not enter a dangerous area to provide help. Offer medical help only within your actual training.</Text>

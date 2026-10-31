@@ -11,8 +11,8 @@ export type IncidentCategory = PersonalHelpCategory
   | 'Other';
 
 export type HelpCategory = 'Shelter' | 'Food and water' | 'Transport' | 'Qualified first aid' | 'Supplies' | 'Other practical help';
-export type VerificationStatus = 'unverified' | 'awaiting_review' | 'verified' | 'rejected';
-export type IncidentStatus = 'new' | 'under_review' | 'verified' | 'assigned' | 'in_progress' | 'resolved' | 'rejected';
+export type VerificationStatus = 'unverified' | 'verified' | 'rejected';
+export type IncidentStatus = 'under_review' | 'verified' | 'assigned' | 'in_progress' | 'resolved' | 'rejected';
 export type NoticeStatus = 'draft' | 'published' | 'expired' | 'withdrawn';
 export type DataFreshness = 'live' | 'recently_synced' | 'cached' | 'outdated' | 'queued';
 
@@ -25,6 +25,7 @@ export type ApproximateLocation = {
 
 export type Incident = {
   id: string;
+  reporterName: string;
   category: IncidentCategory;
   description: string;
   approximateLocation: ApproximateLocation;
@@ -32,7 +33,6 @@ export type Incident = {
   updatedAt: string;
   source: 'community' | 'authority';
   verificationStatus: VerificationStatus;
-  incidentStatus: IncidentStatus;
 };
 
 export type HelpOffer = {
