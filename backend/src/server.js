@@ -122,7 +122,7 @@ function displayName(userId) { return db.users.find((u) => u.id === userId)?.nam
 function publicOffer(offer, viewerId) {
   const categories = offer.categories || [offer.category];
   return {
-    id: offer.id, type: 'offer', icon: HELP_ICONS[categories[0]] || 'hand-left', title: categories.join(' · '),
+    id: offer.id, type: 'offer', categories, icon: HELP_ICONS[categories[0]] || 'hand-left', title: categories.join(' · '),
     author: displayName(offer.ownerId), distance: offer.approximateLocation?.label || 'Location not shared', tags: categories,
     description: offer.description || undefined, photos: (offer.attachments || []).filter((item) => item.approved || offer.ownerId === viewerId).map((item) => publicAttachment(item).url),
     isMine: offer.ownerId === viewerId, status: offer.status, createdAt: offer.createdAt,

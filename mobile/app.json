@@ -31,7 +31,8 @@
         {
           "locationWhenInUsePermission": "Allow SafeTogether to use your location while you create a help request."
         }
-      ]
+      ],
+      "expo-secure-store"
     ],
     "experiments": {
       "typedRoutes": true
