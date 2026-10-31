@@ -1,10 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Alert, Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { router, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
-import * as ImagePicker from 'expo-image-picker';
 import { TacticalMap } from '@/components/TacticalMap';
 import { Button, Card, NeedHelpButton } from '@/components/ui';
 import mock from '@/data/mock.json';
@@ -43,7 +42,6 @@ export default function MapScreen() {
   const [mapLocation, setMapLocation] = useState<Coordinate>(mock.me);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
-  const [incidentPhotos, setIncidentPhotos] = useState<{ uri: string; data: string }[]>([]);
 
   useFocusEffect(useCallback(() => {
     let active = true;
@@ -126,7 +124,6 @@ export default function MapScreen() {
     setSubmitting(true);
     setSubmitError(null);
     let submitted = false;
-    let photoUploadFailed = false;
     try {
       const approximateLocation = await getApproximateCurrentLocation();
       if (helpKind === 'Request resources') {
@@ -138,14 +135,10 @@ export default function MapScreen() {
           ? request as PersonalHelpCategory
           : 'Other personal assistance';
         const description = details.trim();
-        const incident = await api.createIncident({ category, description, approximateLocation, shareWithAuthorities: true });
+        await api.createIncident({ category, description, approximateLocation, shareWithAuthorities: true });
         submitted = true;
-        for (const photo of incidentPhotos) {
-          try { await api.uploadIncidentPhoto(incident.id, photo.data); } catch { photoUploadFailed = true; }
-        }
       }
       setHelpMenuOpen(false);
-      setIncidentPhotos([]);
       if (helpKind !== 'Request resources') app.setSos(true);
       try {
         const snapshot = await api.getMap();
@@ -154,11 +147,9 @@ export default function MapScreen() {
         setSites(mapSites);
         setAllIncidents(snapshot.incidents.map((item) => ({ id: item.id, reporterName: item.reporterName, category: item.category, description: item.description, approximateLocation: item.approximateLocation, submittedAt: item.submittedAt, updatedAt: item.updatedAt, source: item.source, verificationStatus: item.verificationStatus })));
       } catch { /* The submission succeeded; keep the currently loaded map. */ }
-      if (photoUploadFailed) Alert.alert('Report sent', 'Your report was received, but one or more photos could not be uploaded.');
     } catch (error) {
       if (submitted) {
         setHelpMenuOpen(false);
-        setIncidentPhotos([]);
         if (helpKind !== 'Request resources') app.setSos(true);
         Alert.alert('Request sent', 'Your request was received. The map could not refresh.');
       } else {
@@ -167,17 +158,6 @@ export default function MapScreen() {
     } finally {
       setSubmitting(false);
     }
-  }
-
-  async function addIncidentPhotos() {
-    const remaining = 3 - incidentPhotos.length;
-    if (remaining <= 0) return;
-    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], allowsMultipleSelection: true, selectionLimit: remaining, quality: 0.8, base64: true });
-    if (result.canceled) return;
-    const tooLarge = result.assets.some((asset) => asset.fileSize && asset.fileSize > 5 * 1024 * 1024);
-    if (tooLarge) Alert.alert('Photo too large', 'Choose photos smaller than 5 MB each.');
-    const accepted = result.assets.filter((asset) => (!asset.fileSize || asset.fileSize <= 5 * 1024 * 1024) && !!asset.base64);
-    setIncidentPhotos((current) => [...current, ...accepted.map((asset) => ({ uri: asset.uri, data: `data:image/jpeg;base64,${asset.base64}` }))].slice(0, 3));
   }
 
   async function openHelpMenu() {
@@ -281,7 +261,6 @@ export default function MapScreen() {
             {helpKind && <TextInput value={request} onChangeText={setRequest} placeholder={helpKind === 'Emergency' ? 'Describe the help you need (optional)' : 'Other resource or request (optional)'} placeholderTextColor={colors.textDim} style={styles.input} />}
             <Text style={styles.muted}>We’ll use your current location, shifted randomly by up to 500 m.</Text>
             <Text style={styles.kicker}>ADDITIONAL DETAILS (OPTIONAL)</Text><TextInput value={details} onChangeText={setDetails} placeholder="What help do you need?" placeholderTextColor={colors.textDim} style={[styles.input, styles.detailsInput]} multiline textAlignVertical="top" />
-            {helpKind !== 'Request resources' && <View style={styles.photoField}><Text style={styles.kicker}>PHOTOS (OPTIONAL · UP TO 3)</Text><Button label="Add photos" icon="image-outline" color={colors.blue} outline onPress={() => { void addIncidentPhotos(); }} /><View style={styles.photoRow}>{incidentPhotos.map((photo) => <Pressable key={photo.uri} onPress={() => setIncidentPhotos((current) => current.filter((item) => item.uri !== photo.uri))} accessibilityRole="button" accessibilityLabel="Remove photo"><Image source={{ uri: photo.uri }} style={styles.photoPreview} /></Pressable>)}</View></View>}
             <Text style={styles.disclaimer}>Your request will be shared with the SafeTogether community. Incident reports are also available to authorities. For immediate danger, call local emergency services.</Text>
             {submitError && <Text accessibilityRole="alert" style={styles.submitError}>{submitError}</Text>}
             <Button label={submitting ? 'Sending…' : 'Send help request'} icon="send" disabled={!helpKind || submitting} onPress={() => { void submitHelpRequest(); }} />
@@ -556,9 +535,6 @@ const styles = StyleSheet.create({
   detailsInput: { minHeight: 92 },
   disclaimer: { color: colors.orange, backgroundColor: colors.orangeSoft, borderRadius: radius.md, padding: 10, fontSize: 12, fontWeight: '600', lineHeight: 17 },
   submitError: { color: colors.red, fontSize: 13, fontWeight: '700' },
-  photoField: { gap: 8 },
-  photoRow: { flexDirection: 'row', gap: 8 },
-  photoPreview: { width: 60, height: 60, borderRadius: radius.sm },
   kicker: { fontSize: 11, fontWeight: '800', letterSpacing: 0.8, color: colors.textDim },
   title: { fontSize: 18, fontWeight: '800', color: colors.text },
   body: { fontSize: 14, color: colors.text },

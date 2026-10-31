@@ -31,11 +31,8 @@ Create `mobile/.env.local` with `EXPO_PUBLIC_API_URL`. For Expo Go on a phone, u
 | `GET /help-requests`, `POST /help-requests`, `PATCH /help-requests/:id` | Signed in | Create, list, update, resolve, or withdraw emergency, event, or resource requests |
 | `GET /help-requests/:id/messages`, `POST /help-requests/:id/messages` | Signed in | Join and read a coordination thread; request owner and participants can read it |
 | `GET /incidents`, `POST /incidents` | Signed in | Public-safe incident list and report submission |
-| `PATCH /incidents/:id` | Authority | Review status and approve attachment IDs |
-| `POST /incidents/:id/attachments` | Reporter or authority | Upload base64 image data URL (JPEG, PNG, WebP; 5 MB max) |
-| `GET /attachments/:id` | Public if approved; owner or authority for pending | Read approved incident or active-offer photo |
+| `PATCH /incidents/:id` | Authority | Review status |
 | `GET /offers`, `POST /offers`, `PATCH /offers/:id` | Signed in | Create, list, edit, and withdraw aid offers |
-| `POST /offers/:id/attachments` | Offer owner or authority | Upload up to 5 MB JPEG, PNG, or WebP photos for an offer |
 | `GET /notices` | Signed in | Published official notices |
 | `POST /notices`, `PATCH /notices/:id` | Authority | Draft, publish, update, withdraw notices |
 | `GET /rendezvous` | Signed in | Active evacuation rendezvous points |
@@ -60,15 +57,15 @@ Example report:
 }
 ```
 
-Location visibility accepts `private`, `connections`, `connections_authorities`, or `everyone`. Coordinates are rounded to five decimal places before storage and responses. Help reports and offers use the device's current location with a random offset of up to 500 metres. User locations are returned only when the viewer matches that policy. Public incident listing removes reporter identifiers and only includes approved photos for verified incidents. Photo bytes are checked against their declared image format; pending photos are not publicly retrievable.
+Location visibility accepts `private`, `connections`, `connections_authorities`, or `everyone`. Coordinates are rounded to five decimal places before storage and responses. Help reports and offers use the device's current location with a random offset of up to 500 metres. User locations are returned only when the viewer matches that policy. Public incident listing removes reporter identifiers. Incident photo uploads are not supported.
 
 ID-based login stores the entered ID on the user record and uses it as the user's display name. A new ID creates a resident account; entering a different or misspelled ID creates a separate account. The ID is stored in plaintext in `backend/data/store.json`. Since the display name appears on public Help offers and connection records, this also exposes the sign-in ID to other users, who can then access that account. Use this only with IDs intended to be public; a safer design keeps a private sign-in credential separate from the public display name. The public account ID (`usr_…`) is different and can be shared to request a connection; it cannot be used to sign in. IDs created by the earlier hash-only version are migrated to plaintext on the next successful sign-in.
 
 Emergency-site records accept `kind: "shelter" | "safe_zone" | "aid"`, `title`, `summary`, `coordinate: { "latitude": 52.202, "longitude": 20.955 }`, and optional `capacity` and `expiresAt`. Danger zones accept `kind: "attack" | "fire" | "flooding"`, `title`, `summary`, `coordinate`, `radius` in meters, `severity: "critical" | "high" | "medium"`, and optional `expiresAt`. Only authority accounts can publish or deactivate these records. Their coordinates retain five decimal places; resident-reported locations continue to be rounded to two decimals.
 
-The Help offer contract follows the current mobile UI: `categories` is a list selected from Shelter, Food and water, Transport, Qualified first aid, Supplies, or Other practical help. `description` and `approximateLocation` are optional. Offers may have up to three photos; uploads are private until an authority approves them. `PATCH /offers/:id` accepts updated `categories`, `description`, `approximateLocation`, and `status: "withdrawn"`, matching the Help screen's edit and stop actions.
+The Help offer contract follows the current mobile UI: `categories` is a list selected from Shelter, Food and water, Transport, Qualified first aid, Supplies, or Other practical help. `description` is optional; the device's approximate current location is attached automatically when an offer is created or edited. `PATCH /offers/:id` accepts updated `categories`, `description`, `approximateLocation`, and `status: "withdrawn"`, matching the Help screen's edit and stop actions.
 
-Help requests accept `kind: "resource" | "emergency" | "event"`, optional `title`, `categories`, `tags`, `description`, and approximate location. Resource requests and offers are combined by `GET /help-feed` into the mobile card shape (`type`, `title`, `author`, `distance`, `tags`, `description`, `photos`, and `isMine`). A first message on an active request joins the sender to that thread; the requester and joined participants can then retrieve its messages. The API stores messages but does not deliver push notifications or provide a real-time transport, so clients must poll the thread.
+Help requests accept `kind: "resource" | "emergency" | "event"`, optional `title`, `categories`, `tags`, `description`, and approximate location. Resource requests and offers are combined by `GET /help-feed` into the mobile card shape (`type`, `title`, `author`, `distance`, `tags`, `description`, and `isMine`). A first message on an active request joins the sender to that thread; the requester and joined participants can then retrieve its messages. The API stores messages but does not deliver push notifications or provide a real-time transport, so clients must poll the thread.
 
 Examples for the Help screen:
 
@@ -80,7 +77,7 @@ Examples for the Help screen:
 { "kind": "Request resources", "categories": ["Food or water"], "description": "Drinking water for a family of four.", "approximateLocation": "Central district" }
 ```
 
-To coordinate on a request, post `{ "text": "I can bring water to the north entrance. Is that safe?" }` to `/help-requests/:id/messages`, then poll that route with `GET` while the chat is open. The offer photo upload accepts `{ "data": "data:image/jpeg;base64,..." }` at `/offers/:id/attachments`.
+To coordinate on a request, post `{ "text": "I can bring water to the north entrance. Is that safe?" }` to `/help-requests/:id/messages`, then poll that route with `GET` while the chat is open.
 
 ## Current limits
 

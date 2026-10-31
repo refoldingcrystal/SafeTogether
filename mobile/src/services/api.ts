@@ -29,7 +29,6 @@ export type ApiIncident = {
   source: 'community' | 'authority';
   verificationStatus: VerificationStatus;
   status: IncidentStatus;
-  attachments: { id: string; mimeType: string; url: string }[];
 };
 
 export type HelpFeedItem = {
@@ -183,7 +182,6 @@ export const api = {
 
   getIncidents: () => request<ApiIncident[]>('/incidents'),
   createIncident: (input: { category: PersonalHelpCategory; description?: string; approximateLocation: ApproximateLocation | string; shareWithAuthorities?: boolean }) => request<{ id: string }>('/incidents', { method: 'POST', body: JSON.stringify(input) }),
-  uploadIncidentPhoto: (incidentId: string, dataUrl: string) => post(`/incidents/${encodeURIComponent(incidentId)}/attachments`, { data: dataUrl }),
   getNotices: () => request<OfficialNotice[]>('/notices'),
   getRendezvousPoints: () => request<MapSnapshot['rendezvousPoints']>('/rendezvous'),
   getEmergencySites: () => request<EmergencySite[]>('/emergency-sites'),

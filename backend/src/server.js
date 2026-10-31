@@ -7,7 +7,6 @@ import { fileURLToPath } from 'node:url';
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const DATA_DIR = process.env.SAFETOGETHER_DATA_DIR || path.join(ROOT, 'data');
 const DB_FILE = path.join(DATA_DIR, 'store.json');
-const UPLOAD_DIR = path.join(DATA_DIR, 'uploads');
 const PORT = Number(process.env.PORT || 8787);
 const SECRET = process.env.SAFETOGETHER_SECRET || randomBytes(32).toString('hex');
 const MAX_BODY = 7 * 1024 * 1024;
@@ -26,7 +25,7 @@ async function persist() {
 }
 
 async function init() {
-  await mkdir(UPLOAD_DIR, { recursive: true });
+  await mkdir(DATA_DIR, { recursive: true });
   try { db = { ...emptyDb(), ...JSON.parse(await readFile(DB_FILE, 'utf8')) }; }
   catch (error) { if (error.code !== 'ENOENT') throw error; await persist(); }
   let incidentsMigrated = false;
@@ -152,7 +151,6 @@ function offerMapLocation(location) {
   if (result.latitude === undefined || result.longitude === undefined) throw fail(400, 'A map location with latitude and longitude is required for help offers');
   return result;
 }
-function publicAttachment(attachment) { return { id: attachment.id, mimeType: attachment.mimeType, url: `/v1/attachments/${attachment.id}` }; }
 function displayName(userId) { return db.users.find((u) => u.id === userId)?.name || 'Community member'; }
 function publicOffer(offer, viewerId) {
   const categories = offer.categories || [offer.category];
@@ -172,8 +170,8 @@ function publicHelpRequest(request, viewerId) {
   };
 }
 function publicIncident(incident) {
-  const { attachments = [], exactLocation, reporterId, shareWithAuthorities, ...safe } = incident;
-  return { ...safe, reporterName: displayName(reporterId), attachments: incident.status === 'verified' ? attachments.filter((item) => item.approved).map(publicAttachment) : [] };
+  const { attachments, exactLocation, reporterId, shareWithAuthorities, ...safe } = incident;
+  return { ...safe, reporterName: displayName(reporterId) };
 }
 function isPersonalHelpIncident(incident) {
   return PERSONAL_HELP_CATEGORIES.includes(incident.category) || LEGACY_PERSONAL_HELP_CATEGORIES.includes(incident.category);
@@ -184,18 +182,6 @@ function helpFeed(viewerId) {
     ...db.offers.filter((offer) => offer.status === 'active').map((offer) => publicOffer(offer, viewerId)),
   ].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 }
-async function storeImage(data) {
-  const match = typeof data === 'string' && data.match(/^data:(image\/(?:jpeg|png|webp));base64,([A-Za-z0-9+/=]+)$/);
-  if (!match) throw fail(400, 'Image must be a base64 JPEG, PNG, or WebP data URL');
-  const bytes = Buffer.from(match[2], 'base64');
-  if (!bytes.length || bytes.length > 5 * 1024 * 1024) throw fail(413, 'Photo limit is 5 MB');
-  const signatures = { 'image/jpeg': bytes[0] === 0xff && bytes[1] === 0xd8, 'image/png': bytes.subarray(0, 8).equals(Buffer.from([137,80,78,71,13,10,26,10])), 'image/webp': bytes.subarray(0, 4).toString() === 'RIFF' && bytes.subarray(8, 12).toString() === 'WEBP' };
-  if (!signatures[match[1]]) throw fail(400, 'Image content does not match its declared format');
-  const attachment = { id: id('img'), mimeType: match[1], size: bytes.length, uploadedAt: now(), approved: false };
-  await writeFile(path.join(UPLOAD_DIR, attachment.id), bytes, { flag: 'wx', mode: 0o600 });
-  return attachment;
-}
-
 async function route(req, res) {
   const url = new URL(req.url, 'http://localhost');
   const parts = url.pathname.split('/').filter(Boolean).map(decodeURIComponent);
@@ -234,19 +220,6 @@ async function route(req, res) {
     const body = await readBody(req); const user = db.users.find((u) => u.email === clean(body.email, 254).toLowerCase());
     if (!user || typeof body.password !== 'string' || !timingSafeEqual(scryptSync(body.password, user.salt, 64), Buffer.from(user.passwordHash, 'hex'))) throw fail(401, 'Email or password is incorrect');
     return send(res, 200, { token: tokenFor(user.id), user: publicUser(user) });
-  }
-
-  if (resource === 'attachments' && method === 'GET' && recordId) {
-    const incident = db.incidents.find((row) => (row.attachments || []).some((item) => item.id === recordId));
-    const attachment = (incident?.attachments || []).find((item) => item.id === recordId);
-    if (!attachment) throw fail(404, 'Attachment not found');
-    const publiclyVisible = attachment.approved && ((incident && incident.status === 'verified') || (offer && offer.status === 'active'));
-    let viewer = null;
-    if (req.headers.authorization) viewer = auth(req);
-    const owner = viewer && (incident?.reporterId === viewer.id || offer?.ownerId === viewer.id);
-    if (!publiclyVisible && !owner && viewer?.role !== 'authority') throw fail(404, 'Attachment not found');
-    const bytes = await readFile(path.join(UPLOAD_DIR, attachment.id));
-    res.writeHead(200, { 'content-type': attachment.mimeType, 'content-length': bytes.length, 'cache-control': publiclyVisible ? 'public, max-age=300' : 'private, no-store', 'x-content-type-options': 'nosniff', 'access-control-allow-origin': process.env.CORS_ORIGIN || '*' }); res.end(bytes); return;
   }
 
   const user = auth(req);
@@ -318,23 +291,14 @@ async function route(req, res) {
     const body = await readBody(req); const category = clean(body.category, 60); const description = clean(body.description, 1000);
     if (!PERSONAL_HELP_CATEGORIES.includes(category)) throw fail(400, 'Incident category must describe personal assistance: Injured, Stranded, Lost, or Other personal assistance');
     if (!category) throw fail(400, 'Choose a valid personal assistance category');
-    const row = { id: id('inc'), category, description, approximateLocation: approximate(body.approximateLocation), submittedAt: now(), updatedAt: now(), source: 'community', verificationStatus: 'unverified', status: 'under_review', reporterId: user.id, attachments: [], shareWithAuthorities: body.shareWithAuthorities !== false };
+    const row = { id: id('inc'), category, description, approximateLocation: approximate(body.approximateLocation), submittedAt: now(), updatedAt: now(), source: 'community', verificationStatus: 'unverified', status: 'under_review', reporterId: user.id, shareWithAuthorities: body.shareWithAuthorities !== false };
     db.incidents.unshift(row); audit(user.id, 'incident_submitted', 'incident', row.id); await persist();
     return send(res, 201, { data: { id: row.id, category, description, approximateLocation: row.approximateLocation, submittedAt: row.submittedAt, status: row.status, verificationStatus: row.verificationStatus } });
-  }
-  if (resource === 'incidents' && method === 'POST' && recordId && parts[3] === 'attachments') {
-    const incident = db.incidents.find((x) => x.id === recordId);
-    if (!incident) throw fail(404, 'Incident not found');
-    if (incident.reporterId !== user.id && user.role !== 'authority') throw fail(403, 'Only the reporter or an authority can attach photos');
-    const body = await readBody(req); const attachment = await storeImage(body.data);
-    incident.attachments.push(attachment); incident.updatedAt = now(); await persist();
-    return send(res, 201, { data: { id: attachment.id, moderation: 'pending' } });
   }
   if (resource === 'incidents' && method === 'PATCH' && recordId && user.role === 'authority') {
     const row = db.incidents.find((x) => x.id === recordId); if (!row) throw fail(404, 'Incident not found');
     const body = await readBody(req);
     if (['under_review','verified','assigned','in_progress','resolved','rejected'].includes(body.status)) { row.status = body.status; row.verificationStatus = body.status === 'verified' ? 'verified' : body.status === 'rejected' ? 'rejected' : row.verificationStatus; }
-    if (Array.isArray(body.approvedAttachmentIds)) for (const a of row.attachments) a.approved = body.approvedAttachmentIds.includes(a.id);
     row.updatedAt = now(); audit(user.id, 'incident_updated', 'incident', row.id, { status: row.status }); await persist(); return send(res, 200, { data: row });
   }
 
