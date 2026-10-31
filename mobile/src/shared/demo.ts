@@ -26,6 +26,7 @@ export type NearbyPerson = {
   distance: string;
   coordinate: Coordinate;
 };
+export type MapHelpOffer = { id: string; title: string; description?: string; author: string; distance: string; coordinate: Coordinate };
 
 export const incidentCategories: IncidentCategory[] = ['Medical emergency', 'Fire', 'Flooding', 'Trapped person', 'Missing person', 'Road blockage', 'Infrastructure damage', 'Other'];
 export const helpCategories: HelpCategory[] = ['Shelter', 'Food and water', 'Transport', 'Qualified first aid', 'Supplies', 'Other practical help'];
@@ -107,4 +108,9 @@ export const nearbyPeople: NearbyPerson[] = [
   { id: 'nearby-maya', name: 'Maya', initials: 'M', distance: '1.0 km', coordinate: { latitude: 52.2325, longitude: 21.008 } },
   { id: 'nearby-alex', name: 'Alex', initials: 'A', distance: '1.2 km', coordinate: { latitude: 52.215, longitude: 20.986 } },
   { id: 'nearby-lee', name: 'Lee', initials: 'L', distance: '1.1 km', coordinate: { latitude: 52.231, longitude: 20.9815 } },
+];
+
+export const demonstrationHelpOffers: MapHelpOffer[] = [
+  { id: 'demo-offer-water', title: 'Food and water', description: 'Bottled water available for pickup.', author: 'Demo volunteer', distance: 'Central district', coordinate: { latitude: 52.228, longitude: 20.999 } },
+  { id: 'demo-offer-shelter', title: 'Shelter', description: 'A few safe places available nearby.', author: 'Demo volunteer', distance: 'Southern district', coordinate: { latitude: 52.219, longitude: 21.016 } },
 ];

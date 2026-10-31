@@ -9,7 +9,7 @@ import { TacticalMap } from '@/components/TacticalMap';
 import { Button, Card, NeedHelpButton, StatusBadge } from '@/components/ui';
 import mock from '@/data/mock.json';
 import { categoryIcons, incidentColors, incidentGuide } from '@/icons';
-import { demonstrationDangerZones, demonstrationIncidents, emergencySites, nearbyPeople, type Coordinate, type DangerZone, type EmergencySite } from '@/shared/demo';
+import { demonstrationDangerZones, demonstrationHelpOffers, demonstrationIncidents, emergencySites, nearbyPeople, type Coordinate, type DangerZone, type EmergencySite, type MapHelpOffer } from '@/shared/demo';
 import { api, type MapSnapshot } from '@/services/api';
 import { requestSafeRoadRoute, type SafeRoute } from '@/shared/routing';
 import { useApp } from '@/state/app';
@@ -39,6 +39,7 @@ export default function MapScreen() {
   const [manualLocation, setManualLocation] = useState(false);
   const [dangerZones, setDangerZones] = useState(demonstrationDangerZones);
   const [sites, setSites] = useState(emergencySites);
+  const [helpOffers, setHelpOffers] = useState<MapHelpOffer[]>(demonstrationHelpOffers);
   const [allIncidents, setAllIncidents] = useState(demonstrationIncidents);
   const [gps, setGps] = useState<{ latitude: number; longitude: number } | null>(null);
   const [mapLocation, setMapLocation] = useState<Coordinate>(mock.me);
@@ -53,6 +54,11 @@ export default function MapScreen() {
       setDangerZones(withDemonstrationHazards(snapshot.dangerZones));
       const mapSites = withDemonstrationSites(toMapSites(snapshot));
       setSites(mapSites);
+      setHelpOffers(snapshot.helpFeed.flatMap((item) => {
+        const location = item.approximateLocation;
+        if (item.type !== 'offer' || item.isMine || location?.latitude == null || location.longitude == null) return [];
+        return [{ id: item.id, title: item.title, description: item.description, author: item.author, distance: item.distance, coordinate: { latitude: location.latitude, longitude: location.longitude } }];
+      }));
       setAllIncidents(snapshot.incidents.map((item) => ({
         id: item.id,
         category: item.category,
@@ -68,6 +74,7 @@ export default function MapScreen() {
       if (!active) return;
       setDangerZones(demonstrationDangerZones);
       setSites(emergencySites);
+      setHelpOffers(demonstrationHelpOffers);
       setAllIncidents(demonstrationIncidents);
     });
     return () => { active = false; };
@@ -200,6 +207,7 @@ export default function MapScreen() {
         emergencySites={sites}
         nearbyPeople={mapNearbyPeople}
         userLocation={mapLocation}
+        helpOffers={helpOffers}
         plannedRoute={safeRoute?.coordinates}
         destination={customDestination ?? undefined}
         incidents={incidents}
