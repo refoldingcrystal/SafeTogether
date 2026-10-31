@@ -3,7 +3,7 @@ import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { AppProvider } from '@/state/app';
-import { DemoBar, PhoneStatusBar } from '@/components/ui';
+import { PhoneStatusBar } from '@/components/ui';
 import { colors } from '@/theme';
 
 export default function RootLayout() {
@@ -12,7 +12,6 @@ export default function RootLayout() {
       <AppProvider>
         <StatusBar style={Platform.OS === 'web' ? 'dark' : 'light'} />
         <SafeAreaView style={styles.page} edges={['top']}>
-          <DemoBar />
           <View style={styles.phone}>
             {Platform.OS === 'web' && <PhoneStatusBar />}
             <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.bg } }}>
