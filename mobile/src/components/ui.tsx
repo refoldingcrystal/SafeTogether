@@ -151,7 +151,7 @@ const styles = StyleSheet.create({
   },
   buttonText: { fontSize: 15, fontWeight: '700' },
   card: { backgroundColor: colors.card, borderRadius: radius.lg, padding: 16, gap: 10, ...shadow },
-  needHelpButton: { alignItems: 'center', justifyContent: 'center', minWidth: 176, backgroundColor: colors.blue, paddingHorizontal: 24, paddingVertical: 16, borderRadius: radius.lg, ...shadow },
+  needHelpButton: { alignItems: 'center', justifyContent: 'center', minWidth: 176, backgroundColor: colors.red, paddingHorizontal: 24, paddingVertical: 16, borderRadius: radius.pill, ...shadow },
   needHelpTitle: { color: '#fff', fontSize: 17, fontWeight: '900' },
   status: {
     height: 30,
