@@ -3,14 +3,15 @@ import { Alert, Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View 
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { router, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import * as Location from 'expo-location';
 import * as ImagePicker from 'expo-image-picker';
 import { TacticalMap } from '@/components/TacticalMap';
+import { ApproximateLocationPicker } from '@/components/ApproximateLocationPicker';
 import { Button, Card, NeedHelpButton, StatusBadge } from '@/components/ui';
 import mock from '@/data/mock.json';
 import { categoryIcons, incidentColors, incidentGuide } from '@/icons';
 import { demonstrationDangerZones, demonstrationHelpOffers, demonstrationIncidents, emergencySites, type DangerZone, type EmergencySite, type MapHelpOffer } from '@/shared/demo';
 import { api, type MapSnapshot } from '@/services/api';
+import type { ApproximateLocation } from '@/shared/models';
 import { requestSafeRoadRoute, type SafeRoute } from '@/shared/routing';
 import { useApp } from '@/state/app';
 import { colors, radius } from '@/theme';
@@ -38,13 +39,11 @@ export default function MapScreen() {
   const [helpKind, setHelpKind] = useState<HelpKind | null>(null);
   const [request, setRequest] = useState('');
   const [details, setDetails] = useState('');
-  const [location, setLocation] = useState('');
-  const [manualLocation, setManualLocation] = useState(false);
+  const [requestLocation, setRequestLocation] = useState<ApproximateLocation | null>(null);
   const [dangerZones, setDangerZones] = useState(demonstrationDangerZones);
   const [sites, setSites] = useState(emergencySites);
   const [helpOffers, setHelpOffers] = useState<MapHelpOffer[]>(demonstrationHelpOffers);
   const [allIncidents, setAllIncidents] = useState(demonstrationIncidents);
-  const [gps, setGps] = useState<{ latitude: number; longitude: number } | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [incidentPhotos, setIncidentPhotos] = useState<{ uri: string; data: string }[]>([]);
@@ -104,12 +103,10 @@ export default function MapScreen() {
   }
 
   async function submitHelpRequest() {
-    if (!helpKind || submitting) return;
+    if (!helpKind || !requestLocation || submitting) return;
     setSubmitting(true);
     setSubmitError(null);
-    const approximateLocation = gps
-      ? { label: location || 'Current location', ...gps, precision: 'neighborhood' as const }
-      : location || 'Location not shared';
+    const approximateLocation = requestLocation;
     let submitted = false;
     let photoUploadFailed = false;
     try {
@@ -164,20 +161,9 @@ export default function MapScreen() {
     await calculateRoute(from.coordinate, to.coordinate);
   }
 
-  async function openHelpMenu() {
+  function openHelpMenu() {
     setHelpMenuOpen(true);
-    setManualLocation(false);
-    setGps(null);
-    setLocation('');
-    try {
-      const permission = await Location.requestForegroundPermissionsAsync();
-      if (permission.status !== 'granted') return;
-      const current = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
-      setGps({ latitude: current.coords.latitude, longitude: current.coords.longitude });
-      setLocation(`Approx. ${current.coords.latitude.toFixed(2)}, ${current.coords.longitude.toFixed(2)}`);
-    } catch {
-      setManualLocation(true);
-    }
+    setRequestLocation(null);
   }
 
   return (
@@ -272,14 +258,12 @@ export default function MapScreen() {
             {(Object.keys(helpKinds) as HelpKind[]).map((kind) => <Pressable key={kind} onPress={() => { setHelpKind(kind); setRequest(''); }} style={[styles.helpOption, helpKind === kind && styles.helpOptionActive]}><Text style={styles.optionTitle}>{kind}</Text><Text style={styles.optionDetail}>{helpKinds[kind].join(' · ')}</Text></Pressable>)}
             {helpKind && <View style={styles.quickChoices}>{helpKinds[helpKind].map((example) => <Pressable key={example} onPress={() => setRequest(example)} style={[styles.quickChoice, request === example && styles.quickChoiceActive]}><Text style={styles.quickChoiceText}>{example}</Text></Pressable>)}<Pressable onPress={() => setRequest('')} style={styles.quickChoice}><Text style={styles.quickChoiceText}>Other</Text></Pressable></View>}
             {helpKind && <TextInput value={request} onChangeText={setRequest} placeholder="Other request (optional)" placeholderTextColor={colors.textDim} style={styles.input} />}
-            <Text style={styles.kicker}>LOCATION</Text>
-            <View style={styles.locationChoices}><Button label="Use current location" icon="locate" color={colors.blue} outline onPress={() => { setManualLocation(false); void openHelpMenu(); }} /><Button label="Enter manually" color={colors.textMuted} outline onPress={() => { setManualLocation(true); setGps(null); setLocation(''); }} /></View>
-            {manualLocation ? <TextInput value={location} onChangeText={setLocation} placeholder="Neighbourhood or nearby landmark" placeholderTextColor={colors.textDim} style={styles.input} /> : <Text style={styles.muted}>{location || 'Finding your approximate location…'}</Text>}
+            <ApproximateLocationPicker value={requestLocation} onChange={setRequestLocation} />
             <Text style={styles.kicker}>ADDITIONAL DETAILS (OPTIONAL)</Text><TextInput value={details} onChangeText={setDetails} placeholder="What happened or what do you need?" placeholderTextColor={colors.textDim} style={[styles.input, styles.detailsInput]} multiline textAlignVertical="top" />
             {helpKind !== 'Request resources' && <View style={styles.photoField}><Text style={styles.kicker}>PHOTOS (OPTIONAL · UP TO 3)</Text><Button label="Add photos" icon="image-outline" color={colors.blue} outline onPress={() => { void addIncidentPhotos(); }} /><View style={styles.photoRow}>{incidentPhotos.map((photo) => <Pressable key={photo.uri} onPress={() => setIncidentPhotos((current) => current.filter((item) => item.uri !== photo.uri))} accessibilityRole="button" accessibilityLabel="Remove photo"><Image source={{ uri: photo.uri }} style={styles.photoPreview} /></Pressable>)}</View></View>}
             <Text style={styles.disclaimer}>Your request will be shared with the SafeTogether community. Incident reports are also available to authorities. For immediate danger, call local emergency services.</Text>
             {submitError && <Text accessibilityRole="alert" style={styles.submitError}>{submitError}</Text>}
-            <Button label={submitting ? 'Sending…' : 'Send help request'} icon="send" disabled={!helpKind || submitting || !location} onPress={() => { void submitHelpRequest(); }} />
+            <Button label={submitting ? 'Sending…' : 'Send help request'} icon="send" disabled={!helpKind || submitting || !requestLocation} onPress={() => { void submitHelpRequest(); }} />
           </ScrollView>
         </View>
       )}
@@ -588,7 +572,6 @@ const styles = StyleSheet.create({
   quickChoice: { borderWidth: 1, borderColor: colors.border, borderRadius: radius.pill, paddingHorizontal: 12, paddingVertical: 8 },
   quickChoiceActive: { borderColor: colors.blue, backgroundColor: colors.blueSoft },
   quickChoiceText: { color: colors.textMuted, fontSize: 12, fontWeight: '700' },
-  locationChoices: { flexDirection: 'row', gap: 8 },
   input: { minHeight: 46, borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, backgroundColor: colors.bg, color: colors.text, paddingHorizontal: 12, paddingVertical: 10, fontSize: 15 },
   detailsInput: { minHeight: 92 },
   disclaimer: { color: colors.orange, backgroundColor: colors.orangeSoft, borderRadius: radius.md, padding: 10, fontSize: 12, fontWeight: '600', lineHeight: 17 },

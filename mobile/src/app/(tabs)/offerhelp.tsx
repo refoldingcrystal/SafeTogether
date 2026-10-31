@@ -3,8 +3,8 @@ import { Alert, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, St
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { router, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import * as Location from 'expo-location';
 import { Button, Card, Pill } from '@/components/ui';
+import { ApproximateLocationPicker } from '@/components/ApproximateLocationPicker';
 import mock from '@/data/mock.json';
 import { helpCategories } from '@/shared/demo';
 import { useApp } from '@/state/app';
@@ -90,20 +90,6 @@ export default function HelpScreen() {
     setOfferModalVisible(true);
   }
 
-  async function shareOfferLocation() {
-    try {
-      const permission = await Location.requestForegroundPermissionsAsync();
-      if (permission.status !== 'granted') {
-        Alert.alert('Location permission needed', 'Allow location access to place your offer on the map.');
-        return;
-      }
-      const current = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
-      setOfferLocation({ label: 'Approximate current area', latitude: current.coords.latitude, longitude: current.coords.longitude, precision: 'neighborhood' });
-    } catch {
-      Alert.alert('Could not get location', 'Try again or publish without a map location.');
-    }
-  }
-
   function stopOffering(offerId: string) {
     Alert.alert('Stop offering?', 'This offer will be removed from your Help feed.', [
       { text: 'Keep offering', style: 'cancel' },
@@ -174,8 +160,7 @@ export default function HelpScreen() {
         onClose={closeOfferModal}
         onToggleCategory={toggleCategory}
         onChangeDescription={setDescription}
-        onSetLocation={shareOfferLocation}
-        onClearLocation={() => setOfferLocation(null)}
+        onChangeLocation={setOfferLocation}
         onPublish={publishOffer}
       />
       <CoordinationChat
@@ -197,8 +182,7 @@ function OfferHelpModal({
   onClose,
   onToggleCategory,
   onChangeDescription,
-  onSetLocation,
-  onClearLocation,
+  onChangeLocation,
   onPublish,
 }: {
   visible: boolean;
@@ -209,8 +193,7 @@ function OfferHelpModal({
   onClose: () => void;
   onToggleCategory: (category: string) => void;
   onChangeDescription: (value: string) => void;
-  onSetLocation: () => void;
-  onClearLocation: () => void;
+  onChangeLocation: (value: ApproximateLocation | null) => void;
   onPublish: () => void;
 }) {
   return (
@@ -248,21 +231,7 @@ function OfferHelpModal({
               })}
             </View>
 
-            <View style={styles.fieldGroup}>
-              <Text style={styles.sectionLabel}>MAP LOCATION <Text style={styles.optional}>(OPTIONAL)</Text></Text>
-              {offerLocation ? (
-                <View style={styles.locationRow}>
-                  <Text style={styles.locationText}>Shown near {offerLocation.label}</Text>
-                  <Pressable onPress={onClearLocation} accessibilityRole="button"><Text style={styles.clearLocation}>Remove</Text></Pressable>
-                </View>
-              ) : (
-                <Pressable onPress={onSetLocation} style={styles.locationButton} accessibilityRole="button">
-                  <Ionicons name="location-outline" size={18} color={colors.green} />
-                  <Text style={styles.mapLocationActionText}>Add approximate current location</Text>
-                </Pressable>
-              )}
-              <Text style={styles.photoHint}>The map shows an approximate neighborhood location.</Text>
-            </View>
+            <ApproximateLocationPicker value={offerLocation} onChange={onChangeLocation} optional />
 
             <View style={styles.fieldGroup}>
               <Text style={styles.sectionLabel}>DESCRIPTION <Text style={styles.optional}>(OPTIONAL)</Text></Text>
@@ -453,12 +422,6 @@ const styles = StyleSheet.create({
   fieldGroup: { gap: 2 },
   descriptionInput: { minHeight: 92, backgroundColor: colors.bg, borderColor: colors.border, borderWidth: 1, borderRadius: radius.md, paddingHorizontal: 12, paddingVertical: 10, color: colors.text, fontSize: 14 },
   characterCount: { alignSelf: 'flex-end', color: colors.textDim, fontSize: 11, marginTop: 4 },
-  mapLocationActionText: { color: colors.green, fontSize: 12, fontWeight: '700' },
-  photoHint: { color: colors.textDim, fontSize: 11, marginTop: 6 },
-  locationButton: { minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: 8, borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, paddingHorizontal: 12 },
-  locationRow: { minHeight: 44, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, paddingHorizontal: 12 },
-  locationText: { color: colors.text, fontSize: 13, fontWeight: '600' },
-  clearLocation: { color: colors.red, fontSize: 13, fontWeight: '700' },
   modalActions: { paddingHorizontal: 20, paddingTop: 10, borderTopWidth: 1, borderTopColor: colors.border, gap: 4 },
   cancelButton: { height: 38, alignItems: 'center', justifyContent: 'center' },
   cancelText: { color: colors.textMuted, fontWeight: '700', fontSize: 14 },
