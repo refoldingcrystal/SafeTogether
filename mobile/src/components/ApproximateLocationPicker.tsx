@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Alert, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import * as Location from 'expo-location';
 import { Button } from '@/components/ui';
@@ -14,13 +14,9 @@ export function ApproximateLocationPicker({
   onChange: (value: ApproximateLocation | null) => void;
   optional?: boolean;
 }) {
-  const [manualEntry, setManualEntry] = useState(false);
-  useEffect(() => {
-    if (!value || value.latitude != null) setManualEntry(false);
-    else setManualEntry(true);
-  }, [value]);
+  const [manualEntry, setManualEntry] = useState(() => value !== null && value.latitude == null);
 
-  async function useCurrentLocation() {
+  async function requestCurrentLocation() {
     try {
       const permission = await Location.requestForegroundPermissionsAsync();
       if (permission.status !== 'granted') {
@@ -47,7 +43,7 @@ export function ApproximateLocationPicker({
     <View style={styles.container}>
       <Text style={styles.label}>LOCATION{optional ? ' (OPTIONAL)' : ''}</Text>
       <View style={styles.actions}>
-        <Button label="Use current location" icon="locate" color={colors.blue} outline onPress={() => { void useCurrentLocation(); }} />
+        <Button label="Use current location" icon="locate" color={colors.blue} outline onPress={() => { void requestCurrentLocation(); }} />
         <Button label="Enter manually" icon="create-outline" color={colors.textMuted} outline onPress={() => setManualEntry(true)} />
       </View>
       {(manualEntry || (value !== null && value.latitude == null)) && (
