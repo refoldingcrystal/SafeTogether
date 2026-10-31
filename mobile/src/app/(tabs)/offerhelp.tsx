@@ -118,7 +118,7 @@ export default function HelpScreen() {
   }
 
   return (
-    <ScrollView style={styles.root} contentContainerStyle={styles.content}>
+    <ScrollView style={styles.root} contentContainerStyle={styles.content} keyboardShouldPersistTaps="always">
       <View>
         <Text style={styles.title}>Help nearby</Text>
         <Text style={styles.sub}>Offers and requests from neighbours</Text>
@@ -222,7 +222,7 @@ function OfferHelpModal({
             </Pressable>
           </View>
 
-          <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.modalContent}>
+          <ScrollView keyboardShouldPersistTaps="always" contentContainerStyle={styles.modalContent}>
             <Text style={styles.sectionLabel}>WHAT CAN YOU OFFER?</Text>
             <View style={styles.categoryGrid}>
               {helpCategories.map((category) => {
@@ -321,7 +321,8 @@ function CoordinationChat({ request, messages, onClose, onSend }: {
             </Pressable>
           </View>
 
-          <ScrollView style={styles.messages} contentContainerStyle={styles.messagesContent} keyboardShouldPersistTaps="always">
+          <ScrollView style={styles.chatConversation} contentContainerStyle={styles.chatConversationContent} keyboardShouldPersistTaps="always">
+            <View style={styles.messagesContent}>
             {messages.length === 0 ? (
               <View style={styles.emptyChat}>
                 <Ionicons name="chatbubbles-outline" size={28} color={colors.blue} />
@@ -336,25 +337,26 @@ function CoordinationChat({ request, messages, onClose, onSend }: {
                 </View>
               </View>
             ))}
-          </ScrollView>
-
-          <View style={styles.chatComposer}>
-            <Text style={styles.chatDemoNote}>Messages stay on this device in this demo.</Text>
-            <View style={styles.composerRow}>
-              <TextInput
-                value={draft}
-                onChangeText={setDraft}
-                placeholder="Write a message…"
-                placeholderTextColor={colors.textDim}
-                style={styles.messageInput}
-                maxLength={500}
-                multiline
-              />
-              <Pressable onPress={send} disabled={!draft.trim()} style={[styles.sendButton, !draft.trim() && styles.sendButtonDisabled]} accessibilityRole="button" accessibilityLabel="Send message">
-                <Ionicons name="send" size={18} color="#fff" />
-              </Pressable>
             </View>
-          </View>
+
+            <View style={styles.chatComposer}>
+              <Text style={styles.chatDemoNote}>Messages stay on this device in this demo.</Text>
+              <View style={styles.composerRow}>
+                <TextInput
+                  value={draft}
+                  onChangeText={setDraft}
+                  placeholder="Write a message…"
+                  placeholderTextColor={colors.textDim}
+                  style={styles.messageInput}
+                  maxLength={500}
+                  multiline
+                />
+                <Pressable onPress={send} disabled={!draft.trim()} style={[styles.sendButton, !draft.trim() && styles.sendButtonDisabled]} accessibilityRole="button" accessibilityLabel="Send message">
+                  <Ionicons name="send" size={18} color="#fff" />
+                </Pressable>
+              </View>
+            </View>
+          </ScrollView>
         </View>
       </KeyboardAvoidingView>
     </Modal>
@@ -469,7 +471,8 @@ const styles = StyleSheet.create({
   chatSheet: { height: '78%', maxHeight: '88%', backgroundColor: colors.card, borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingTop: 18, paddingBottom: Platform.OS === 'ios' ? 26 : 16, ...shadow },
   chatHeader: { minHeight: 64, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10, paddingHorizontal: 18, paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: colors.border },
   chatHeaderText: { flex: 1, gap: 4 },
-  messages: { flex: 1 },
+  chatConversation: { flex: 1 },
+  chatConversationContent: { flexGrow: 1, justifyContent: 'space-between' },
   messagesContent: { flexGrow: 1, justifyContent: 'flex-end', padding: 16, gap: 10 },
   emptyChat: { alignItems: 'center', alignSelf: 'center', maxWidth: 260, gap: 8, paddingVertical: 24 },
   emptyChatTitle: { color: colors.text, fontSize: 16, fontWeight: '800' },
