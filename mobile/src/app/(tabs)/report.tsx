@@ -79,7 +79,11 @@ export default function ReportScreen() {
         label={app.offline ? 'Send via Mesh' : 'Submit report'}
         color={colors.red}
         disabled={!valid}
-        onPress={() => valid && setSubmitted(`ST-${Math.floor(3000 + Math.random() * 6000)}`)}
+        onPress={() => {
+          if (!valid) return;
+          if (app.offline) app.enqueue('report', `Report · ${category}`);
+          setSubmitted(`ST-${Math.floor(3000 + Math.random() * 6000)}`);
+        }}
       />
     </Screen>
   );

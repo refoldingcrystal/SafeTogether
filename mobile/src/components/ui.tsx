@@ -1,9 +1,8 @@
 import { useEffect, type ReactNode } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import Animated, { Easing, SlideInUp, SlideOutUp, useAnimatedStyle, useSharedValue, withRepeat, withTiming } from 'react-native-reanimated';
+import Animated, { Easing, useAnimatedStyle, useSharedValue, withRepeat, withTiming } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
-import mock from '@/data/mock.json';
 import { verificationMeta, type IconName } from '@/icons';
 import type { VerificationStatus } from '@/shared/models';
 import { useApp } from '@/state/app';
@@ -118,11 +117,8 @@ export function DemoBar() {
         <DemoToggle
           icon="airplane"
           label="Airplane mode"
-          on={app.offline}
-          onPress={() => {
-            app.setOffline(!app.offline);
-            if (!app.offline) setTimeout(() => router.navigate('/mesh'), 700);
-          }}
+          on={app.offlineSource === 'demo'}
+          onPress={() => app.setOffline(app.offlineSource !== 'demo')}
         />
         <DemoToggle
           icon="refresh"
@@ -144,43 +140,6 @@ function DemoToggle({ icon, label, on, onPress }: { icon: IconName; label: strin
       <Ionicons name={icon} size={14} color={on ? '#101828' : '#fff'} />
       <Text style={[styles.demoBtnText, on && { color: '#101828' }]}>{label}</Text>
     </Pressable>
-  );
-}
-
-export function P2PNotification() {
-  const app = useApp();
-  if (!app.notification) return null;
-  const b = mock.basement;
-  return (
-    <Animated.View entering={SlideInUp.springify().damping(16)} exiting={SlideOutUp} style={styles.notif}>
-      <View style={styles.notifHead}>
-        <View style={styles.notifIcon}>
-          <Ionicons name="radio" size={16} color="#fff" />
-        </View>
-        <Text style={styles.notifMeta}>
-          P2P MESSAGE · VIA MESH · {b.author}, {b.street}
-        </Text>
-      </View>
-      <Text style={styles.notifTitle}>“{b.message}”</Text>
-      <Text style={styles.notifBody}>{b.details}</Text>
-      <View style={styles.notifRow}>
-        <View style={{ flex: 1 }}>
-          <Button
-            icon="navigate"
-            label="Show route"
-            color={colors.green}
-            onPress={() => {
-              app.setRoute('basement');
-              app.dismissNotification();
-              router.navigate('/');
-            }}
-          />
-        </View>
-        <View style={{ flex: 1 }}>
-          <Button label="Later" color={colors.textMuted} outline onPress={app.dismissNotification} />
-        </View>
-      </View>
-    </Animated.View>
   );
 }
 
@@ -245,32 +204,4 @@ const styles = StyleSheet.create({
   },
   demoBtnOn: { backgroundColor: '#FDB022' },
   demoBtnText: { color: '#fff', fontWeight: '700', fontSize: 12 },
-  notif: {
-    position: 'absolute',
-    top: 38,
-    left: 10,
-    right: 10,
-    backgroundColor: colors.card,
-    borderRadius: radius.lg,
-    borderLeftWidth: 5,
-    borderLeftColor: colors.orange,
-    padding: 14,
-    gap: 6,
-    zIndex: 100,
-    ...shadow,
-    shadowOpacity: 0.25,
-  },
-  notifHead: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  notifIcon: {
-    width: 26,
-    height: 26,
-    borderRadius: 13,
-    backgroundColor: colors.mesh,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  notifMeta: { flex: 1, fontSize: 10, fontWeight: '800', color: colors.mesh, letterSpacing: 0.5 },
-  notifTitle: { fontSize: 17, fontWeight: '800', color: colors.text },
-  notifBody: { fontSize: 13, color: colors.textMuted },
-  notifRow: { flexDirection: 'row', gap: 8, marginTop: 4 },
 });

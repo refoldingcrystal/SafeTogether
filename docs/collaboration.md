@@ -41,7 +41,7 @@ Expo Go is suitable for the current project. If a future change adds a native mo
 |---|---|---|---|
 | Collaborator 1 | Map panel | Demonstration map, incident markers, official notices, filters, connectivity states, and OpenStreetMap integration | `mobile/src/app/(tabs)/index.tsx`, map components, shared incident and notice data |
 | Collaborator 2 | Report panel | Native report form, validation, confirmation, draft preservation, retry states, and report privacy | `mobile/src/app/(tabs)/report.tsx`, shared incident data |
-| Collaborator 3 | Mesh panel | Offline and peer-to-peer status, connection states, queued-action visibility, graceful fallbacks, and privacy messaging | `mobile/src/app/(tabs)/mesh.tsx`, `mobile/src/components/MeshRadar.tsx`, shared connectivity state |
+| Collaborator 3 | Mesh panel | Offline and peer-to-peer status, connection states, queued-action visibility, graceful fallbacks, and privacy messaging | `mobile/src/app/(tabs)/mesh.tsx`, `mobile/src/components/MeshCompose.tsx`, `mobile/src/components/MeshFinder.tsx`, shared connectivity state |
 | Collaborator 4 | Help panel | Neighbour help feed, requests, offer discovery, empty/offline states, and the offer-help flow | `mobile/src/app/(tabs)/feed.tsx`, `mobile/src/app/(tabs)/offer.tsx`, shared help-offer data |
 | Collaborator 5 | Guides panel | Guide search, detail screens, checklist, emergency contacts, source metadata, and content governance | `mobile/src/app/(tabs)/guides.tsx`, `mobile/src/app/guide/`, shared guide data |
 
